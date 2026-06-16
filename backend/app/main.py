@@ -1,0 +1,142 @@
+r"""FastAPI поверх ядра taxcore — тонкий слой для UI.
+
+Запуск (из backend/):
+    .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --port 8077
+Документация: http://127.0.0.1:8077/docs
+"""
+from __future__ import annotations
+
+from dataclasses import asdict
+from decimal import Decimal
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+
+from taxcore import (
+    PeriodData,
+    UsnObject,
+    YEARS,
+    calc_contributions,
+    calc_usn,
+    get_params,
+    usn_calendar,
+    usn_quick,
+)
+
+app = FastAPI(title="СвояКнига API", version="0.1.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+def _obj(value: str) -> UsnObject:
+    try:
+        return UsnObject(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=422,
+            detail=f"usn_object должен быть 'income' или 'income_minus', получено {value!r}",
+        )
+
+
+# ---------- Запросы ----------
+
+class CalcRequest(BaseModel):
+    year: int = 2025
+    usn_object: str = "income"                       # "income" | "income_minus"
+    income: Decimal = Field(ge=0)
+    expenses: Decimal = Field(default=0, ge=0)
+    has_employees: bool = False
+    contributions_to_deduct: Optional[Decimal] = None  # для «Доходы»; None → вся сумма взносов
+    rate: Optional[Decimal] = None
+
+
+class PeriodIn(BaseModel):
+    label: str
+    income_cumulative: Decimal = Field(ge=0)
+    expenses_cumulative: Decimal = Field(default=0, ge=0)
+    contributions_to_deduct_cumulative: Decimal = Field(default=0, ge=0)
+
+
+class PeriodsRequest(BaseModel):
+    year: int = 2025
+    usn_object: str = "income"
+    has_employees: bool = False
+    rate: Optional[Decimal] = None
+    periods: List[PeriodIn]
+
+
+# ---------- Эндпоинты ----------
+
+@app.get("/api/health")
+def health():
+    return {"status": "ok"}
+
+
+@app.get("/api/params")
+def params_years():
+    return {"years": sorted(YEARS)}
+
+
+@app.get("/api/params/{year}")
+def params(year: int):
+    try:
+        return asdict(get_params(year))
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post("/api/calc")
+def calc(req: CalcRequest):
+    """Годовой расчёт: взносы + УСН + календарь (даты)."""
+    obj = _obj(req.usn_object)
+    try:
+        contr = calc_contributions(req.year, req.income, req.expenses, obj)
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    if obj == UsnObject.INCOME:
+        ded = req.contributions_to_deduct if req.contributions_to_deduct is not None else contr.total
+    else:
+        ded = Decimal("0")
+
+    usn = usn_quick(
+        req.year, obj, req.income,
+        expenses=req.expenses, contributions_to_deduct=ded,
+        has_employees=req.has_employees, rate=req.rate,
+    )
+    # Календарь: даты + суммы взносов (поквартальные авансы из годового расчёта не выводим,
+    # чтобы не вводить в заблуждение — для них есть /api/calc/periods).
+    cal = usn_calendar(req.year, usn=None, contributions=contr)
+
+    return {
+        "vznosy": asdict(contr),
+        "usn": asdict(usn),
+        "calendar": [asdict(e) for e in cal],
+    }
+
+
+@app.post("/api/calc/periods")
+def calc_periods(req: PeriodsRequest):
+    """Поквартальный расчёт нарастающим итогом + календарь с суммами авансов."""
+    obj = _obj(req.usn_object)
+    periods = [
+        PeriodData(
+            p.label, p.income_cumulative,
+            p.expenses_cumulative, p.contributions_to_deduct_cumulative,
+        )
+        for p in req.periods
+    ]
+    try:
+        usn = calc_usn(req.year, obj, periods, has_employees=req.has_employees, rate=req.rate)
+    except (KeyError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    cal = usn_calendar(req.year, usn=usn)
+    return {"usn": asdict(usn), "calendar": [asdict(e) for e in cal]}
