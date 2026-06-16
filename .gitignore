@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+*.egg-info/
+.coverage
+htmlcov/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+dist/
+build/
+*.tsbuildinfo
+.env*.local
+
+# Env / secrets (НИКОГДА не коммитить ключи, КЭП, токены)
+.env
+*.key
+*.pfx
+*.p12
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
