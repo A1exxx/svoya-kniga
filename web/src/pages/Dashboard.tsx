@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { Card } from '../components/ui'
 import { IconCheck, IconChevron, IconClock, IconSend } from '../components/icons'
+import { TaskWizardModal, type TaskEvent } from '../components/TaskWizardModal'
 
 const dec = (d: { toNumber: () => number } | null | undefined) =>
   formatRub(d == null ? null : d.toNumber())
@@ -18,6 +20,7 @@ function startOfTodayMs(): number {
 export function Dashboard() {
   const { activeOrg } = useOrg()
   const o = activeOrg
+  const [wizard, setWizard] = useState<TaskEvent | null>(null)
 
   let c: ReturnType<typeof compute> | null = null
   try {
@@ -82,7 +85,10 @@ export function Dashboard() {
             return (
               <div
                 key={i}
-                className="flex items-center gap-3 rounded-lg border border-line px-3 py-2.5 transition-colors hover:bg-slate-50"
+                role="button"
+                tabIndex={0}
+                onClick={() => setWizard(e)}
+                className="flex cursor-pointer items-center gap-3 rounded-lg border border-line px-3 py-2.5 transition-colors hover:border-brand-300 hover:bg-slate-50"
               >
                 <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${badge}`}>
                   <Icon size={16} />
@@ -121,6 +127,8 @@ export function Dashboard() {
           </Card>
         </div>
       )}
+
+      {wizard && <TaskWizardModal event={wizard} onClose={() => setWizard(null)} />}
     </div>
   )
 }

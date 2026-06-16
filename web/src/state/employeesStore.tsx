@@ -1,0 +1,99 @@
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useOrg } from './orgStore'
+
+/** Сотрудник в штате организации (для расчётов и отчётности). */
+export interface Employee {
+  id: string
+  fio: string
+  position: string
+  /** Оклад в месяц (гросс) */
+  salary: number
+  /** Детей для стандартного вычета */
+  children: number
+  /** Страховой стаж, лет (для больничных) */
+  stazhYears: number
+  /** Дата приёма на работу (для ЕФС-1) */
+  hireDate: string // YYYY-MM-DD
+  /** ИП в реестре МСП — льготный тариф взносов */
+  msp: boolean
+}
+
+const KEY = 'svoyakniga.employees.v1'
+type Store = Record<string, Employee[]>
+
+function makeId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return 'emp-' + Math.floor(performance.now() * 1000).toString(36)
+  }
+}
+
+function load(): Store {
+  try {
+    return (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
+  } catch {
+    return {}
+  }
+}
+
+interface EmployeesCtxValue {
+  employees: Employee[]
+  addEmployee: () => string
+  updateEmployee: (id: string, patch: Partial<Employee>) => void
+  removeEmployee: (id: string) => void
+}
+
+const Ctx = createContext<EmployeesCtxValue | null>(null)
+
+export function EmployeesProvider({ children }: { children: ReactNode }) {
+  const { activeOrgId } = useOrg()
+  const [store, setStore] = useState<Store>(load)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(store))
+    } catch {
+      /* ignore */
+    }
+  }, [store])
+
+  const employees = store[activeOrgId] ?? []
+
+  const addEmployee = (): string => {
+    const id = makeId()
+    const e: Employee = {
+      id,
+      fio: '',
+      position: '',
+      salary: 60000,
+      children: 0,
+      stazhYears: 5,
+      hireDate: '',
+      msp: true,
+    }
+    setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), e] }))
+    return id
+  }
+
+  const updateEmployee = (id: string, patch: Partial<Employee>) =>
+    setStore((s) => ({
+      ...s,
+      [activeOrgId]: (s[activeOrgId] ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
+    }))
+
+  const removeEmployee = (id: string) =>
+    setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((e) => e.id !== id) }))
+
+  return (
+    <Ctx.Provider value={{ employees, addEmployee, updateEmployee, removeEmployee }}>
+      {children}
+    </Ctx.Provider>
+  )
+}
+
+export function useEmployees(): EmployeesCtxValue {
+  const ctx = useContext(Ctx)
+  if (!ctx) throw new Error('useEmployees must be used within EmployeesProvider')
+  return ctx
+}

@@ -7,6 +7,7 @@ import { OpsProvider } from './state/opsStore'
 import { DocsProvider } from './state/docsStore'
 import { ContractorsProvider } from './state/contractorsStore'
 import { GoodsProvider } from './state/goodsStore'
+import { EmployeesProvider } from './state/employeesStore'
 import { applyOverrides } from './state/paramsStore'
 
 // Применяем локальные правки параметров (если есть) до первого рендера.
@@ -18,9 +19,11 @@ createRoot(document.getElementById('root')!).render(
       <OpsProvider>
         <ContractorsProvider>
           <GoodsProvider>
-            <DocsProvider>
-              <App />
-            </DocsProvider>
+            <EmployeesProvider>
+              <DocsProvider>
+                <App />
+              </DocsProvider>
+            </EmployeesProvider>
           </GoodsProvider>
         </ContractorsProvider>
       </OpsProvider>
