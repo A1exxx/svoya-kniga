@@ -162,6 +162,12 @@ export function childDeductionMonthly(
   singleParent = false
 ): Decimal {
   const p = getPayroll(year);
+  if (children < 0 || disabledChildren < 0) {
+    throw new Error('Количество детей не может быть отрицательным');
+  }
+  if (disabledChildren > children) {
+    throw new Error('Детей-инвалидов не может быть больше общего числа детей');
+  }
   let total = new Decimal('0');
   for (let i = 1; i <= children; i++) {
     if (i === 1) {
@@ -360,15 +366,19 @@ export function calcVacation(
   base12m: DecimalLike,
   vacationDays: number
 ): VacationResult {
+  if (vacationDays < 0) {
+    throw new Error('Число дней отпуска не может быть отрицательным');
+  }
   const p = getPayroll(year);
   const base = toDecimal(base12m);
   const avgDailyRaw = base.div(new Decimal('12')).div(new Decimal('29.3'));
-  const minDaily = p.mrot.div(new Decimal('29.3'));
-  const avgDaily = Decimal.max(avgDailyRaw, minDaily);
+  const minDaily = money(p.mrot.div(new Decimal('29.3')));
+  // Округляем среднедневной до копеек один раз, чтобы сумма = СДЗ × дни сходилась вручную.
+  const avgDaily = money(Decimal.max(avgDailyRaw, minDaily));
   const gross = money(avgDaily.times(vacationDays));
-  const ndfl = roundRub(gross.times(new Decimal('0.13')));
+  const ndfl = ndflProgressive(gross);
   const notes = [
-    'НДФЛ с отпускных взят упрощённо 13% (без прогрессии и вычетов) — сверить.',
+    'НДФЛ с отпускных по прогрессивной шкале от суммы выплаты (без годовых вычетов) — сверить с бухгалтером.',
   ];
   return {
     year,
@@ -414,8 +424,12 @@ export function calcSickLeave(
   earningsPrev2: DecimalLike,
   stazhYears: number,
   sickDays: number,
-  employerDays = 3
+  employerDays = 3,
+  daysInMonth = 31
 ): SickLeaveResult {
+  if (sickDays < 0) {
+    throw new Error('Число дней болезни не может быть отрицательным');
+  }
   const p = getPayroll(year);
   const y1 = year - 1;
   const y2 = year - 2;
@@ -454,12 +468,14 @@ export function calcSickLeave(
     coeff = new Decimal('0.6');
   }
 
-  const dailyBenefit = money(avg.times(coeff));
+  // Дневное пособие с учётом стажа, но не ниже МРОТ за полный месяц (ст. 6.1 ФЗ № 255-ФЗ).
+  const mrotDailyFloor = p.mrot.div(new Decimal(daysInMonth));
+  const dailyBenefit = money(Decimal.max(avg.times(coeff), mrotDailyFloor));
   const total = money(dailyBenefit.times(sickDays));
   const empDays = Math.min(employerDays, sickDays);
   const employerPart = money(dailyBenefit.times(empDays));
   const sfrPart = money(total.minus(employerPart));
-  const ndfl = roundRub(total.times(new Decimal('0.13')));
+  const ndfl = ndflProgressive(total);
 
   return {
     year,
@@ -515,7 +531,18 @@ export function calcAlimony(
   let base = gross.minus(ndflD);
   if (base.lt(0)) base = new Decimal('0');
 
-  const n = Math.max(1, Math.min(children, 3));
+  if (children <= 0) {
+    return {
+      salary_gross: money(gross),
+      ndfl: money(ndflD),
+      base_after_ndfl: money(base),
+      share_label: '0',
+      alimony: new Decimal('0'),
+      capped: false,
+      notes: ['Нет детей на алименты — удержание не начисляется.'],
+    };
+  }
+  const n = Math.min(children, 3);
   const share = ALIMONY_SHARES[n];
   const label = ALIMONY_LABELS[n];
   const raw = base.times(share);

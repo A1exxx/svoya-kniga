@@ -41,4 +41,9 @@ __all__ = [
     "PeriodData", "PeriodResult", "UsnYearResult", "calc_usn", "usn_quick",
     # ens
     "CalendarEvent", "usn_calendar",
+    # payroll
+    "PayrollParams", "PAYROLL", "get_payroll", "ndfl_progressive", "child_deduction_monthly",
+    "SalaryMonth", "SalaryResult", "calc_salary",
+    "VacationResult", "calc_vacation", "SickLeaveResult", "calc_sick_leave",
+    "AlimonyResult", "calc_alimony",
 ]

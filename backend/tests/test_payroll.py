@@ -78,9 +78,10 @@ def test_salary_non_msp_uses_full_rate():
 def test_vacation_basic():
     r = calc_vacation(2025, base_12m=600_000, vacation_days=14)
     assert r.avg_daily == D("1706.48")   # 600000/12/29.3
-    assert r.gross == D("23890.78")
+    assert r.gross == D("23890.72")      # = СДЗ(округл.) × 14 — сходится вручную
+    assert r.avg_daily * 14 == r.gross
     assert r.ndfl == 3106
-    assert r.net == D("20784.78")
+    assert r.net == D("20784.72")
 
 
 def test_vacation_min_daily_floor():
@@ -137,3 +138,31 @@ def test_payroll_params_verified():
 def test_unknown_payroll_year_raises():
     with pytest.raises(KeyError):
         get_payroll(2010)
+
+
+# --- Исправления по состязательной проверке -------------------------------
+
+def test_sick_leave_not_below_mrot():
+    # Низкий стаж + нулевой заработок → пособие не ниже МРОТ за полный месяц (ст. 6.1 ФЗ-255).
+    r = calc_sick_leave(2025, earnings_prev1=0, earnings_prev2=0, stazh_years=3, sick_days=31)
+    assert r.daily_benefit == D("723.87")     # 22440 / 31
+    assert r.total >= 22_000
+
+
+def test_alimony_no_children_is_zero():
+    r = calc_alimony(salary_gross=100_000, ndfl=13_000, children=0)
+    assert r.alimony == 0
+    assert r.share_label == "0"
+
+
+def test_child_deduction_rejects_bad_counts():
+    with pytest.raises(ValueError):
+        child_deduction_monthly(2025, children=1, disabled_children=-1)
+    with pytest.raises(ValueError):
+        child_deduction_monthly(2025, children=1, disabled_children=2)
+
+
+def test_star_import_exposes_payroll():
+    import taxcore
+    for name in ("calc_salary", "ndfl_progressive", "calc_vacation", "calc_sick_leave", "calc_alimony"):
+        assert name in taxcore.__all__

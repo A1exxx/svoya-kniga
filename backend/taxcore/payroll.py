@@ -152,6 +152,10 @@ def child_deduction_monthly(
 ) -> Decimal:
     """Месячная сумма стандартных вычетов на детей."""
     p = get_payroll(year)
+    if children < 0 or disabled_children < 0:
+        raise ValueError("Количество детей не может быть отрицательным")
+    if disabled_children > children:
+        raise ValueError("Детей-инвалидов не может быть больше общего числа детей")
     total = Decimal("0")
     for i in range(1, children + 1):
         if i == 1:
@@ -310,14 +314,17 @@ class VacationResult:
 
 def calc_vacation(year: int, base_12m, vacation_days: int) -> VacationResult:
     """Отпускные: СДЗ = база за 12 мес ÷ 12 ÷ 29,3 (ст. 139 ТК РФ). НДФЛ упрощённо 13%."""
+    if vacation_days < 0:
+        raise ValueError("Число дней отпуска не может быть отрицательным")
     p = get_payroll(year)
     base = to_decimal(base_12m)
     avg_daily_raw = base / Decimal("12") / Decimal("29.3")
-    min_daily = p.mrot / Decimal("29.3")
-    avg_daily = max(avg_daily_raw, min_daily)
+    min_daily = money(p.mrot / Decimal("29.3"))
+    # Округляем среднедневной до копеек один раз, чтобы сумма = СДЗ × дни сходилась вручную.
+    avg_daily = money(max(avg_daily_raw, min_daily))
     gross = money(avg_daily * vacation_days)
-    ndfl = round_rub(gross * Decimal("0.13"))
-    notes = ["НДФЛ с отпускных взят упрощённо 13% (без прогрессии и вычетов) — сверить."]
+    ndfl = ndfl_progressive(gross)
+    notes = ["НДФЛ с отпускных по прогрессивной шкале от суммы выплаты (без годовых вычетов) — сверить с бухгалтером."]
     return VacationResult(
         year=year,
         avg_daily=money(avg_daily),
@@ -356,9 +363,12 @@ def calc_sick_leave(
     stazh_years: float,
     sick_days: int,
     employer_days: int = 3,
+    days_in_month: int = 31,
 ) -> SickLeaveResult:
     """Больничный: СДЗ = (заработок за 2 пред. года, каждый ≤ предельной базы) ÷ 730,
     с учётом стажа и ограничений мин/макс. Первые `employer_days` дней — за счёт работодателя."""
+    if sick_days < 0:
+        raise ValueError("Число дней болезни не может быть отрицательным")
     p = get_payroll(year)
     y1, y2 = year - 1, year - 2
     cap1 = SICK_LEAVE_BASE_BY_YEAR.get(y1)
@@ -391,12 +401,14 @@ def calc_sick_leave(
     else:
         coeff = Decimal("0.6")
 
-    daily_benefit = money(avg * coeff)
+    # Дневное пособие с учётом стажа, но не ниже МРОТ за полный месяц (ст. 6.1 ФЗ № 255-ФЗ).
+    mrot_daily_floor = p.mrot / Decimal(days_in_month)
+    daily_benefit = money(max(avg * coeff, mrot_daily_floor))
     total = money(daily_benefit * sick_days)
     emp_days = min(employer_days, sick_days)
     employer_part = money(daily_benefit * emp_days)
     sfr_part = money(total - employer_part)
-    ndfl = round_rub(total * Decimal("0.13"))
+    ndfl = ndfl_progressive(total)
 
     return SickLeaveResult(
         year=year,
@@ -439,7 +451,17 @@ def calc_alimony(salary_gross, ndfl, children: int) -> AlimonyResult:
     base = gross - ndfl_d
     if base < 0:
         base = Decimal("0")
-    n = max(1, min(children, 3))
+    if children <= 0:
+        return AlimonyResult(
+            salary_gross=money(gross),
+            ndfl=money(ndfl_d),
+            base_after_ndfl=money(base),
+            share_label="0",
+            alimony=Decimal("0"),
+            capped=False,
+            notes=["Нет детей на алименты — удержание не начисляется."],
+        )
+    n = min(children, 3)
     share = _ALIMONY_SHARES[n]
     label = {1: "1/4", 2: "1/3", 3: "1/2"}[n]
     raw = base * share

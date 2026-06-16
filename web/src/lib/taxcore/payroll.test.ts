@@ -158,9 +158,10 @@ describe('calcVacation', () => {
     expect(r.avg_daily.toString()).toBe('1706.48');
   });
 
-  it('base 600 000, 14 дней: gross == 23 890.78', () => {
+  it('base 600 000, 14 дней: gross == 23 890.72 (СДЗ × дни)', () => {
     const r = calcVacation(2025, 600_000, 14);
-    expect(r.gross.toString()).toBe('23890.78');
+    expect(r.gross.toString()).toBe('23890.72');
+    expect(r.avg_daily.times(14).toString()).toBe(r.gross.toString());
   });
 
   it('base 600 000, 14 дней: ndfl == 3 106', () => {
@@ -168,9 +169,9 @@ describe('calcVacation', () => {
     expect(r.ndfl.toNumber()).toBe(3_106);
   });
 
-  it('base 600 000, 14 дней: net == 20 784.78', () => {
+  it('base 600 000, 14 дней: net == 20 784.72', () => {
     const r = calcVacation(2025, 600_000, 14);
-    expect(r.net.toString()).toBe('20784.78');
+    expect(r.net.toString()).toBe('20784.72');
   });
 
   it('очень низкая база → avg_daily == min_daily (пол по МРОТ)', () => {
