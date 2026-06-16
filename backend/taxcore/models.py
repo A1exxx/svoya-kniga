@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, InvalidOperation
 from enum import Enum
 
 __all__ = ["UsnObject", "round_rub", "money", "to_decimal", "shift_to_workday"]
@@ -16,10 +16,27 @@ _KOPECK = Decimal("0.01")
 
 
 def to_decimal(value) -> Decimal:
-    """Безопасное приведение к Decimal (через str, чтобы не тащить погрешность float)."""
+    """Безопасное приведение к Decimal (через str, чтобы не тащить погрешность float).
+
+    Бросает ValueError на мусорные входы (None, '', NaN, Inf, bool) — чтобы ошибка
+    ввода не «протекла» молча в расчёт и не выдала неверную сумму налога.
+    """
+    if isinstance(value, bool):
+        raise ValueError(f"Ожидалось число, получено булево значение: {value!r}")
+    if value is None:
+        raise ValueError("Ожидалось число, получено None")
     if isinstance(value, Decimal):
-        return value
-    return Decimal(str(value))
+        d = value
+    else:
+        if isinstance(value, str) and value.strip() == "":
+            raise ValueError("Ожидалось число, получена пустая строка")
+        try:
+            d = Decimal(str(value))
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError(f"Не удалось преобразовать в число: {value!r}") from exc
+    if not d.is_finite():
+        raise ValueError(f"Денежная сумма должна быть конечной (не NaN/Inf): {value!r}")
+    return d
 
 
 def round_rub(value) -> Decimal:

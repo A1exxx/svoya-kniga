@@ -58,11 +58,15 @@ def test_2024_params():
     assert r.one_percent == 7000  # (1 000 000 − 300 000) * 1%
 
 
-def test_unverified_year_has_note():
-    # 2026 параметры помечены как несверенные → должно быть предупреждение.
-    assert get_params(2026).verified is False
+def test_2026_params_verified_with_legal_basis():
+    # 2026 параметры подтверждены (ст. 430 НК) → флаг verified, без предупреждения.
+    p = get_params(2026)
+    assert p.verified is True
+    assert "430" in p.note
+    assert p.fixed_contributions == 57390
+    assert p.max_variable_contributions == 321818
     r = calc_contributions(2026, income=1_000_000)
-    assert any("не сверен" in n.lower() for n in r.notes)
+    assert not any("не сверен" in n.lower() for n in r.notes)
 
 
 def test_unknown_year_raises():
