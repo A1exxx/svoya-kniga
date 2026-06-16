@@ -5,6 +5,7 @@ import { Taxes } from './pages/Taxes'
 import { Settings } from './pages/Settings'
 import { Requisites } from './pages/Requisites'
 import { Employees } from './pages/Employees'
+import { Money } from './pages/Money'
 import { Stub } from './pages/Stub'
 
 export default function App() {
@@ -16,10 +17,7 @@ export default function App() {
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/requisites" element={<Requisites />} />
           <Route path="/settings" element={<Settings />} />
-          <Route
-            path="/money"
-            element={<Stub title="Деньги" planned="Учёт поступлений и списаний, загрузка банковской выписки, операции с кассой." />}
-          />
+          <Route path="/money" element={<Money />} />
           <Route
             path="/documents"
             element={<Stub title="Документы" planned="Счета, акты, накладные, счета-фактуры, УПД, шаблоны." />}
