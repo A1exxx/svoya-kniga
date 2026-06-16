@@ -13,6 +13,22 @@ from .params import DEFAULT_YEAR, YEARS, YearParams, get_params
 from .vznosy import ContributionsResult, calc_contributions
 from .usn import PeriodData, PeriodResult, UsnYearResult, calc_usn, usn_quick
 from .ens import CalendarEvent, usn_calendar
+from .payroll import (
+    PAYROLL,
+    AlimonyResult,
+    PayrollParams,
+    SalaryMonth,
+    SalaryResult,
+    SickLeaveResult,
+    VacationResult,
+    calc_alimony,
+    calc_salary,
+    calc_sick_leave,
+    calc_vacation,
+    child_deduction_monthly,
+    get_payroll,
+    ndfl_progressive,
+)
 
 __all__ = [
     # models
