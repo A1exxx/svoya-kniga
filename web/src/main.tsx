@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.tsx'
 import { OrgProvider } from './state/orgStore'
 import { OpsProvider } from './state/opsStore'
+import { DocsProvider } from './state/docsStore'
 import { applyOverrides } from './state/paramsStore'
 
 // Применяем локальные правки параметров (если есть) до первого рендера.
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <OrgProvider>
       <OpsProvider>
-        <App />
+        <DocsProvider>
+          <App />
+        </DocsProvider>
       </OpsProvider>
     </OrgProvider>
   </StrictMode>,

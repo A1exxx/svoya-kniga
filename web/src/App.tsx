@@ -6,6 +6,7 @@ import { Settings } from './pages/Settings'
 import { Requisites } from './pages/Requisites'
 import { Employees } from './pages/Employees'
 import { Money } from './pages/Money'
+import { Documents } from './pages/Documents'
 import { Stub } from './pages/Stub'
 
 export default function App() {
@@ -18,10 +19,7 @@ export default function App() {
           <Route path="/requisites" element={<Requisites />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/money" element={<Money />} />
-          <Route
-            path="/documents"
-            element={<Stub title="Документы" planned="Счета, акты, накладные, счета-фактуры, УПД, шаблоны." />}
-          />
+          <Route path="/documents" element={<Documents />} />
           <Route
             path="/contractors"
             element={<Stub title="Контрагенты" planned="Справочник контрагентов с автозаполнением по ИНН (ЕГРЮЛ/ЕГРИП)." />}

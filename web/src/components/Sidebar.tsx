@@ -18,7 +18,7 @@ export const NAV = [
   { to: '/', label: 'Задачи и отчётность', Icon: IconTasks, end: true },
   { to: '/taxes', label: 'Налоги', Icon: IconCalc },
   { to: '/money', label: 'Деньги', Icon: IconWallet },
-  { to: '/documents', label: 'Документы', Icon: IconDoc, wip: true },
+  { to: '/documents', label: 'Документы', Icon: IconDoc },
   { to: '/contractors', label: 'Контрагенты', Icon: IconUsers, wip: true },
   { to: '/goods', label: 'Товары', Icon: IconPackage, wip: true },
   { to: '/employees', label: 'Сотрудники', Icon: IconId },
