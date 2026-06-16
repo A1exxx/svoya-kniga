@@ -1,4 +1,4 @@
-"""Быстрая демонстрация расчётов taxcore без интерфейса.
+r"""Быстрая демонстрация расчётов taxcore без интерфейса.
 
 Запуск из backend/:
     .\.venv\Scripts\python.exe demo.py
@@ -6,6 +6,7 @@
 Пример: ИП на УСН «Доходы» 6%, без работников, доход 2 400 000 ₽/год,
 равномерно по 600 000 ₽ за квартал.
 """
+import sys
 from decimal import Decimal
 
 from taxcore import (
@@ -16,6 +17,12 @@ from taxcore import (
     get_params,
     usn_calendar,
 )
+
+# Корректный вывод кириллицы и знака ₽ в консоли Windows.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 YEAR = 2025
 INCOME = Decimal("2400000")
