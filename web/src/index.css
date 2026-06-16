@@ -27,3 +27,25 @@ body {
 .tnum {
   font-variant-numeric: tabular-nums;
 }
+
+/* Печать: показываем только документ .print-doc */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .print-doc,
+  .print-doc * {
+    visibility: visible !important;
+  }
+  .print-doc {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+    padding: 0 !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

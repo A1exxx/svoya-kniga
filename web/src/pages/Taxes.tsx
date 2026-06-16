@@ -1,9 +1,13 @@
+import { useState } from 'react'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { getParams, type UsnObject } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconSend } from '../components/icons'
+import { PrintModal } from '../components/PrintModal'
+import { DeclarationDoc } from '../components/DeclarationDoc'
+import { SendDemoModal } from '../components/SendDemoModal'
 
 const dec = (d: { toNumber: () => number } | null | undefined) =>
   formatRub(d == null ? null : d.toNumber())
@@ -19,6 +23,7 @@ const kindIcon = {
 export function Taxes() {
   const { activeOrg, updateActiveOrg } = useOrg()
   const o = activeOrg
+  const [modal, setModal] = useState<'decl' | 'send' | null>(null)
 
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
@@ -229,28 +234,41 @@ export function Taxes() {
                 </div>
               </Card>
 
-              <Card>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium text-ink">Подписать КЭП и отправить в ФНС</div>
-                    <div className="text-xs text-muted">
-                      Электронная подпись и сдача отчётности появятся позже.
-                    </div>
-                  </div>
+              <Card title="Отчётность и отправка">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    disabled
-                    className="flex cursor-not-allowed items-center gap-2 rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-400"
+                    onClick={() => setModal('decl')}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    <IconCheck size={16} className="text-brand-600" />
+                    Декларация УСН — печать / PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModal('send')}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
                   >
                     <IconSend size={16} />
-                    В разработке
+                    Подписать и отправить в ФНС
                   </button>
                 </div>
+                <p className="mt-3 text-xs text-muted">
+                  Декларацию можно распечатать или сохранить в PDF. Подписание КЭП и отправка —
+                  пока в демо-режиме (имитация процесса); реальная сдача появится позже.
+                </p>
               </Card>
             </>
           )}
         </div>
       </div>
+
+      {modal === 'decl' && computed && (
+        <PrintModal title="Декларация по УСН — предпросмотр" onClose={() => setModal(null)}>
+          <DeclarationDoc org={o} computed={computed} />
+        </PrintModal>
+      )}
+      {modal === 'send' && <SendDemoModal onClose={() => setModal(null)} />}
     </div>
   )
 }
