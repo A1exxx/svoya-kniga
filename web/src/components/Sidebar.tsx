@@ -19,8 +19,8 @@ export const NAV = [
   { to: '/taxes', label: 'Налоги', Icon: IconCalc },
   { to: '/money', label: 'Деньги', Icon: IconWallet },
   { to: '/documents', label: 'Документы', Icon: IconDoc },
-  { to: '/contractors', label: 'Контрагенты', Icon: IconUsers, wip: true },
-  { to: '/goods', label: 'Товары', Icon: IconPackage, wip: true },
+  { to: '/contractors', label: 'Контрагенты', Icon: IconUsers },
+  { to: '/goods', label: 'Товары', Icon: IconPackage },
   { to: '/employees', label: 'Сотрудники', Icon: IconId },
   { to: '/requisites', label: 'Реквизиты', Icon: IconBuilding },
   { to: '/settings', label: 'Настройки', Icon: IconSettings },
@@ -40,7 +40,6 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-0.5 overflow-auto px-2 py-3">
         {NAV.map(({ to, label, Icon, ...rest }) => {
-          const wip = 'wip' in rest && rest.wip
           const end = 'end' in rest && rest.end
           return (
             <NavLink
@@ -57,11 +56,6 @@ export function Sidebar() {
             >
               <Icon size={20} className="shrink-0" />
               <span className="flex-1 truncate">{label}</span>
-              {wip && (
-                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-warn">
-                  скоро
-                </span>
-              )}
             </NavLink>
           )
         })}

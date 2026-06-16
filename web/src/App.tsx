@@ -7,7 +7,8 @@ import { Requisites } from './pages/Requisites'
 import { Employees } from './pages/Employees'
 import { Money } from './pages/Money'
 import { Documents } from './pages/Documents'
-import { Stub } from './pages/Stub'
+import { Contractors } from './pages/Contractors'
+import { Goods } from './pages/Goods'
 
 export default function App() {
   return (
@@ -20,14 +21,8 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/money" element={<Money />} />
           <Route path="/documents" element={<Documents />} />
-          <Route
-            path="/contractors"
-            element={<Stub title="Контрагенты" planned="Справочник контрагентов с автозаполнением по ИНН (ЕГРЮЛ/ЕГРИП)." />}
-          />
-          <Route
-            path="/goods"
-            element={<Stub title="Товары" planned="Номенклатура товаров и услуг, остатки." />}
-          />
+          <Route path="/contractors" element={<Contractors />} />
+          <Route path="/goods" element={<Goods />} />
           <Route path="/employees" element={<Employees />} />
           <Route path="*" element={<Dashboard />} />
         </Route>

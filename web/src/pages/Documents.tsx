@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { docTotals, useDocs, type DocItem, type VatMode } from '../state/docsStore'
+import { contractorDetails, useContractors } from '../state/contractorsStore'
+import { useGoods } from '../state/goodsStore'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
@@ -18,6 +20,8 @@ const VAT_OPTIONS: { value: VatMode; label: string }[] = [
 export function Documents() {
   const { activeOrg } = useOrg()
   const { docs, addDoc, updateDoc, removeDoc } = useDocs()
+  const { contractors } = useContractors()
+  const { goods } = useGoods()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
 
@@ -34,6 +38,19 @@ export function Documents() {
   const addItem = () => selected && updateDoc(selected.id, { items: [...selected.items, { name: '', qty: 1, price: 0 }] })
   const removeItem = (idx: number) =>
     selected && updateDoc(selected.id, { items: selected.items.filter((_, i) => i !== idx) })
+
+  // Подставить контрагента из справочника в покупателя.
+  const pickContractor = (id: string) => {
+    const c = contractors.find((x) => x.id === id)
+    if (!selected || !c) return
+    updateDoc(selected.id, { buyer: c.name, buyerDetails: contractorDetails(c) })
+  }
+  // Добавить позицию из номенклатуры новой строкой.
+  const addFromGood = (id: string) => {
+    const g = goods.find((x) => x.id === id)
+    if (!selected || !g) return
+    updateDoc(selected.id, { items: [...selected.items, { name: g.name, qty: 1, price: g.price }] })
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -135,12 +152,26 @@ export function Documents() {
                 </Field>
               </div>
 
+              {contractors.length > 0 && (
+                <Field label="Выбрать из справочника контрагентов">
+                  <select className={inputClass} value="" onChange={(e) => pickContractor(e.target.value)}>
+                    <option value="">— выбрать контрагента —</option>
+                    {contractors.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name || 'Без названия'}
+                        {c.inn ? ` · ИНН ${c.inn}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label={selected.type === 'invoice' ? 'Покупатель' : 'Заказчик'}>
                   <input className={inputClass} placeholder="ООО «Ромашка»" value={selected.buyer} onChange={(e) => updateDoc(selected.id, { buyer: e.target.value })} />
                 </Field>
                 <Field label="ИНН / адрес покупателя">
-                  <input className={inputClass} placeholder="ИНN 7700000000, г. Москва" value={selected.buyerDetails} onChange={(e) => updateDoc(selected.id, { buyerDetails: e.target.value })} />
+                  <input className={inputClass} placeholder="ИНН 7700000000, г. Москва" value={selected.buyerDetails} onChange={(e) => updateDoc(selected.id, { buyerDetails: e.target.value })} />
                 </Field>
               </div>
 
@@ -157,9 +188,21 @@ export function Documents() {
                     </div>
                   ))}
                 </div>
-                <button type="button" onClick={addItem} className="mt-2 flex cursor-pointer items-center gap-1.5 text-sm font-medium text-brand-600">
-                  <IconPlus size={14} /> Добавить строку
-                </button>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <button type="button" onClick={addItem} className="flex cursor-pointer items-center gap-1.5 text-sm font-medium text-brand-600">
+                    <IconPlus size={14} /> Добавить строку
+                  </button>
+                  {goods.length > 0 && (
+                    <select className={`${inputClass} max-w-[280px]`} value="" onChange={(e) => addFromGood(e.target.value)}>
+                      <option value="">+ из товаров и услуг…</option>
+                      {goods.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.name || 'Без названия'} · {formatRub(g.price, { kopecks: true })}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               <Field label="Примечание">
