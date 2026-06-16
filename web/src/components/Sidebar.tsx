@@ -21,7 +21,7 @@ export const NAV = [
   { to: '/documents', label: 'Документы', Icon: IconDoc, wip: true },
   { to: '/contractors', label: 'Контрагенты', Icon: IconUsers, wip: true },
   { to: '/goods', label: 'Товары', Icon: IconPackage, wip: true },
-  { to: '/employees', label: 'Сотрудники', Icon: IconId, wip: true },
+  { to: '/employees', label: 'Сотрудники', Icon: IconId },
   { to: '/requisites', label: 'Реквизиты', Icon: IconBuilding },
   { to: '/settings', label: 'Настройки', Icon: IconSettings },
 ] as const

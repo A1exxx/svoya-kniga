@@ -4,6 +4,7 @@ import { Dashboard } from './pages/Dashboard'
 import { Taxes } from './pages/Taxes'
 import { Settings } from './pages/Settings'
 import { Requisites } from './pages/Requisites'
+import { Employees } from './pages/Employees'
 import { Stub } from './pages/Stub'
 
 export default function App() {
@@ -31,10 +32,7 @@ export default function App() {
             path="/goods"
             element={<Stub title="Товары" planned="Номенклатура товаров и услуг, остатки." />}
           />
-          <Route
-            path="/employees"
-            element={<Stub title="Сотрудники" planned="Зарплата, НДФЛ, страховые взносы и отчётность за сотрудников." />}
-          />
+          <Route path="/employees" element={<Employees />} />
           <Route path="*" element={<Dashboard />} />
         </Route>
       </Routes>
