@@ -9,6 +9,8 @@ import { PrintModal } from '../components/PrintModal'
 import { DeclarationDoc } from '../components/DeclarationDoc'
 import { SendDemoModal } from '../components/SendDemoModal'
 import { declarationUsnXml, declarationFileName } from '../lib/declarationXml'
+import { ensNotificationXml, ensFileName } from '../lib/ensXml'
+import { EnsNotificationDoc } from '../components/EnsNotificationDoc'
 import { downloadText } from '../lib/download'
 
 const dec = (d: { toNumber: () => number } | null | undefined) =>
@@ -25,7 +27,8 @@ const kindIcon = {
 export function Taxes() {
   const { activeOrg, updateActiveOrg } = useOrg()
   const o = activeOrg
-  const [modal, setModal] = useState<'decl' | 'send' | null>(null)
+  const [modal, setModal] = useState<'decl' | 'ens' | 'send' | null>(null)
+  const [sendTitle, setSendTitle] = useState('Декларация по УСН')
 
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
@@ -237,35 +240,72 @@ export function Taxes() {
               </Card>
 
               <Card title="Отчётность и отправка">
-                <div className="flex flex-wrap gap-2">
+                <div className="text-sm font-medium text-ink">Декларация по УСН за {o.year}</div>
+                <div className="mt-2 flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => setModal('decl')}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
                   >
                     <IconCheck size={16} className="text-brand-600" />
-                    Декларация УСН — печать / PDF
+                    Печать / PDF
                   </button>
                   <button
                     type="button"
                     onClick={() => downloadText(declarationFileName(o), declarationUsnXml(o, computed!), 'application/xml;charset=utf-8')}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
                   >
                     <IconDoc size={16} className="text-brand-600" />
-                    Скачать XML (КНД 1152017)
+                    Скачать XML
                   </button>
                   <button
                     type="button"
-                    onClick={() => setModal('send')}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+                    onClick={() => {
+                      setSendTitle(`Декларация по УСН за ${o.year}`)
+                      setModal('send')
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
                   >
                     <IconSend size={16} />
-                    Подписать и отправить в ФНС
+                    Подписать и отправить
                   </button>
                 </div>
+
+                <div className="mt-4 text-sm font-medium text-ink">Уведомление ЕНС (КНД 1110355)</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setModal('ens')}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    <IconCheck size={16} className="text-brand-600" />
+                    Печать / PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadText(ensFileName(o), ensNotificationXml(o, computed!), 'application/xml;charset=utf-8')}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-3.5 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    <IconDoc size={16} className="text-brand-600" />
+                    Скачать XML
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSendTitle('Уведомление об исчисленных суммах (ЕНС)')
+                      setModal('send')
+                    }}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+                  >
+                    <IconSend size={16} />
+                    Подписать и отправить
+                  </button>
+                </div>
+
                 <p className="mt-3 text-xs text-muted">
-                  Декларацию можно распечатать или сохранить в PDF. Подписание КЭП и отправка —
-                  пока в демо-режиме (имитация процесса); реальная сдача появится позже.
+                  Документы можно распечатать, сохранить в PDF или выгрузить в XML (формат ФНС).
+                  Подписание КЭП и отправка — пока имитация процесса; реальная сдача (через шлюз ФНС
+                  или оператора ЭДО) появится позже.
                 </p>
               </Card>
             </>
@@ -278,7 +318,12 @@ export function Taxes() {
           <DeclarationDoc org={o} computed={computed} />
         </PrintModal>
       )}
-      {modal === 'send' && <SendDemoModal onClose={() => setModal(null)} />}
+      {modal === 'ens' && computed && (
+        <PrintModal title="Уведомление ЕНС — предпросмотр" onClose={() => setModal(null)}>
+          <EnsNotificationDoc org={o} computed={computed} />
+        </PrintModal>
+      )}
+      {modal === 'send' && <SendDemoModal docTitle={sendTitle} onClose={() => setModal(null)} />}
     </div>
   )
 }

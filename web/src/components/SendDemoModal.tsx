@@ -9,7 +9,13 @@ const STEPS = [
 ]
 
 /** Имитация сдачи отчётности (как в Эльбе) — БЕЗ реальной отправки. */
-export function SendDemoModal({ onClose }: { onClose: () => void }) {
+export function SendDemoModal({
+  onClose,
+  docTitle = 'отчётность',
+}: {
+  onClose: () => void
+  docTitle?: string
+}) {
   const [done, setDone] = useState(0)
 
   useEffect(() => {
@@ -30,6 +36,7 @@ export function SendDemoModal({ onClose }: { onClose: () => void }) {
           Демо-режим
         </div>
         <h2 className="text-lg font-semibold text-ink">Подписание и отправка в ФНС</h2>
+        <p className="mt-1 text-sm text-ink">{docTitle}</p>
         <p className="mt-1 text-sm text-muted">
           Это имитация процесса. Реальная подпись КЭП и сдача появятся на следующем этапе
           (через бесплатный шлюз ФНС или оператора ЭДО).
