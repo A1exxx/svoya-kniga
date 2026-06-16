@@ -4,10 +4,12 @@ import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { getParams, type UsnObject } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
-import { IconCheck, IconClock, IconSend } from '../components/icons'
+import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { DeclarationDoc } from '../components/DeclarationDoc'
 import { SendDemoModal } from '../components/SendDemoModal'
+import { declarationUsnXml, declarationFileName } from '../lib/declarationXml'
+import { downloadText } from '../lib/download'
 
 const dec = (d: { toNumber: () => number } | null | undefined) =>
   formatRub(d == null ? null : d.toNumber())
@@ -243,6 +245,14 @@ export function Taxes() {
                   >
                     <IconCheck size={16} className="text-brand-600" />
                     Декларация УСН — печать / PDF
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => downloadText(declarationFileName(o), declarationUsnXml(o, computed!), 'application/xml;charset=utf-8')}
+                    className="flex cursor-pointer items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                  >
+                    <IconDoc size={16} className="text-brand-600" />
+                    Скачать XML (КНД 1152017)
                   </button>
                   <button
                     type="button"

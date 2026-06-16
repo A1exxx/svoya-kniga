@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps, type Operation } from '../state/opsStore'
 import { formatRub, formatDate } from '../lib/format'
@@ -6,6 +6,7 @@ import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { KudirDoc } from '../components/KudirDoc'
+import { parse1CClientBankExchange, readBankStatement } from '../lib/bankImport'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -51,6 +52,25 @@ export function Money() {
     setApplied(true)
   }
 
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [importMsg, setImportMsg] = useState<string | null>(null)
+
+  const onImportFile = async (file: File) => {
+    try {
+      const text = await readBankStatement(file)
+      const { ops: drafts, errors } = parse1CClientBankExchange(text, activeOrg.bankAccount)
+      if (errors.length) {
+        setImportMsg(errors.join(' '))
+        return
+      }
+      drafts.forEach((d) => addOp(d))
+      const inc = drafts.filter((d) => d.kind === 'income').length
+      setImportMsg(`Загружено операций: ${drafts.length} (приход ${inc}, расход ${drafts.length - inc}).`)
+    } catch (e) {
+      setImportMsg('Не удалось прочитать файл: ' + (e as Error).message)
+    }
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -61,14 +81,40 @@ export function Money() {
             Доходы и расходы за {activeOrg.year} год. Формируют КУДиР и подставляются в расчёт налога.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setPrintKudir(true)}
-          className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
-        >
-          Печать КУДиР
-        </button>
+        <div className="flex gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".txt,.1c,text/plain"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) onImportFile(f)
+              e.target.value = ''
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            Загрузить выписку
+          </button>
+          <button
+            type="button"
+            onClick={() => setPrintKudir(true)}
+            className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            Печать КУДиР
+          </button>
+        </div>
       </header>
+
+      {importMsg && (
+        <div className="mb-5">
+          <Note tone={importMsg.startsWith('Загружено') ? 'info' : 'warn'}>{importMsg}</Note>
+        </div>
+      )}
 
       {/* Сводка */}
       <div className="mb-5 grid gap-4 sm:grid-cols-3">
@@ -242,7 +288,9 @@ export function Money() {
       <div className="mt-5">
         <Note>
           Операции хранятся локально в браузере (демо). Отметка «Учитывать в налоге» определяет,
-          попадёт ли сумма в КУДиР и расчёт. Загрузка банковской выписки появится позже.
+          попадёт ли сумма в КУДиР и расчёт. Кнопка «Загрузить выписку» принимает файл формата
+          1CClientBankExchange (выгрузка из интернет-банка) — приход/расход определяются по вашему
+          расчётному счёту из «Реквизитов».
         </Note>
       </div>
 
