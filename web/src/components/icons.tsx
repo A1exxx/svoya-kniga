@@ -62,3 +62,9 @@ export const IconInfo = (p: IconProps) => (
 export const IconSend = (p: IconProps) => (
   <svg {...base(p)}><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" /></svg>
 )
+export const IconBuilding = (p: IconProps) => (
+  <svg {...base(p)}><rect x="4" y="3" width="16" height="18" rx="1.5" /><path d="M8 7h2M14 7h2M8 11h2M14 11h2M8 15h2M14 15h2M10 21v-3h4v3" /></svg>
+)
+export const IconPlus = (p: IconProps) => (
+  <svg {...base(p)}><path d="M12 5v14M5 12h14" /></svg>
+)

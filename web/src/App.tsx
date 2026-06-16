@@ -3,6 +3,7 @@ import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { Taxes } from './pages/Taxes'
 import { Settings } from './pages/Settings'
+import { Requisites } from './pages/Requisites'
 import { Stub } from './pages/Stub'
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/taxes" element={<Taxes />} />
+          <Route path="/requisites" element={<Requisites />} />
           <Route path="/settings" element={<Settings />} />
           <Route
             path="/money"

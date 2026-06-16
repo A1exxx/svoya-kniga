@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
-import { useTaxInputs } from '../state/store'
+import { useOrg } from '../state/orgStore'
 import { Card } from '../components/ui'
 import { IconCheck, IconChevron, IconClock, IconSend } from '../components/icons'
 
@@ -16,10 +16,12 @@ function startOfTodayMs(): number {
 }
 
 export function Dashboard() {
-  const { inputs } = useTaxInputs()
+  const { activeOrg } = useOrg()
+  const o = activeOrg
+
   let c: ReturnType<typeof compute> | null = null
   try {
-    c = compute(inputs)
+    c = compute(o)
   } catch {
     c = null
   }
@@ -36,6 +38,7 @@ export function Dashboard() {
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
         <div>
+          <div className="text-sm text-muted">{o.name}</div>
           <h1 className="text-2xl font-semibold text-ink">Задачи и отчётность</h1>
           <p className="mt-1 text-sm text-muted">
             Что и когда заплатить и сдать. Данные берутся из расчёта на экране «Налоги».
@@ -50,10 +53,9 @@ export function Dashboard() {
         </Link>
       </header>
 
-      {/* Сводка */}
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>
-          <div className="text-sm text-muted">Налог УСН за {inputs.year}</div>
+          <div className="text-sm text-muted">Налог УСН за {o.year}</div>
           <div className="tnum mt-1 text-2xl font-semibold text-ink">{dec(c?.usn.tax_year_final)}</div>
         </Card>
         <Card>
@@ -63,25 +65,19 @@ export function Dashboard() {
         <Card>
           <div className="text-sm text-muted">Режим</div>
           <div className="mt-1 text-lg font-semibold text-ink">
-            {inputs.usnObject === 'income' ? 'УСН «Доходы» 6%' : 'УСН «Д − Р» 15%'}
+            {o.usnObject === 'income' ? 'УСН «Доходы» 6%' : 'УСН «Д − Р» 15%'}
           </div>
-          <div className="text-xs text-muted">{inputs.hasEmployees ? 'с работниками' : 'без работников'}</div>
+          <div className="text-xs text-muted">{o.hasEmployees ? 'с работниками' : 'без работников'}</div>
         </Card>
       </div>
 
-      {/* Актуальные задачи */}
       <Card title="Актуальные задачи">
         <div className="space-y-1.5">
           {upcoming.length === 0 && <p className="text-sm text-muted">Нет предстоящих задач.</p>}
           {upcoming.map((e, i) => {
             const Icon = kindIcon[e.kind]
-            const overdue = e.days < 0
-            const soon = e.days >= 0 && e.days <= 14
-            const badge = overdue
-              ? 'bg-red-50 text-danger'
-              : soon
-                ? 'bg-amber-50 text-warn'
-                : 'bg-slate-100 text-muted'
+            const soon = e.days <= 14
+            const badge = soon ? 'bg-amber-50 text-warn' : 'bg-slate-100 text-muted'
             const badgeText = soon ? `через ${e.days} дн.` : formatDate(e.due)
             return (
               <div
@@ -99,9 +95,7 @@ export function Dashboard() {
                   </div>
                 </div>
                 {e.amount != null && (
-                  <span className="tnum whitespace-nowrap text-sm font-medium text-ink">
-                    {dec(e.amount)}
-                  </span>
+                  <span className="tnum whitespace-nowrap text-sm font-medium text-ink">{dec(e.amount)}</span>
                 )}
                 <span className={`shrink-0 rounded px-2 py-0.5 text-[11px] font-medium ${badge}`}>
                   {badgeText}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { YEARS } from '../lib/taxcore'
 import { NUM_FIELDS, type NumField, hasOverride, resetYear, setOverride } from '../state/paramsStore'
-import { useTaxInputs } from '../state/store'
+import { useOrg } from '../state/orgStore'
 import { Card, Field, Note, inputClass } from '../components/ui'
 
 const YEARS_LIST = [2024, 2025, 2026]
@@ -58,8 +58,8 @@ function toDisplay(year: number, f: NumField): string {
 }
 
 export function Settings() {
-  const { inputs, setInputs } = useTaxInputs()
-  const [year, setYear] = useState(inputs.year)
+  const { activeOrg, forceRefresh } = useOrg()
+  const [year, setYear] = useState(activeOrg.year)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
 
@@ -78,7 +78,7 @@ export function Settings() {
       fields[f] = FIELD_INFO[f].kind === 'percent' ? raw / 100 : raw
     }
     setOverride(year, fields)
-    setInputs({}) // форсируем пересчёт на экранах «Налоги»/«Дашборд»
+    forceRefresh() // пересчёт на экранах «Налоги»/«Дашборд»
     setSaved(true)
   }
 
@@ -87,7 +87,7 @@ export function Settings() {
     const d: Record<string, string> = {}
     for (const f of NUM_FIELDS) d[f] = toDisplay(year, f)
     setDraft(d)
-    setInputs({})
+    forceRefresh()
     setSaved(false)
   }
 

@@ -1,18 +1,20 @@
-/** Единая точка расчёта — используется и экраном «Налоги», и «Дашбордом». */
+/** Единая точка расчёта по организации — используется экранами «Налоги» и «Дашборд». */
 import { calcContributions, usnCalendar, usnQuick } from './taxcore'
-import type { TaxInputs } from '../state/store'
+import type { Org } from '../state/orgStore'
 
-export function compute(inp: TaxInputs) {
-  const contr = calcContributions(inp.year, inp.income, inp.expenses, inp.usnObject)
+export function compute(org: Org) {
+  const rate = org.regionalRate != null ? org.regionalRate / 100 : undefined
+  const contr = calcContributions(org.year, org.income, org.expenses, org.usnObject)
   // Для «Доходы» к вычету принимаем взносы (фикс + 1%); для «Доходы−расходы» — 0
   // (там взносы учтены в расходах). Для ИП с работниками вычет ограничивается 50% внутри calcUsn.
-  const deduct = inp.usnObject === 'income' ? contr.total : 0
-  const usn = usnQuick(inp.year, inp.usnObject, inp.income, {
-    expenses: inp.expenses,
+  const deduct = org.usnObject === 'income' ? contr.total : 0
+  const usn = usnQuick(org.year, org.usnObject, org.income, {
+    expenses: org.expenses,
     contributionsToDeduct: deduct,
-    hasEmployees: inp.hasEmployees,
+    hasEmployees: org.hasEmployees,
+    rate,
   })
-  const calendar = usnCalendar(inp.year, usn, contr)
+  const calendar = usnCalendar(org.year, usn, contr)
   return { contr, usn, calendar }
 }
 

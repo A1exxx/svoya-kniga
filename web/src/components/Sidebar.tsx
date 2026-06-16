@@ -1,9 +1,12 @@
 import { NavLink } from 'react-router-dom'
+import { useOrg } from '../state/orgStore'
 import {
+  IconBuilding,
   IconCalc,
   IconDoc,
   IconId,
   IconPackage,
+  IconPlus,
   IconSettings,
   IconTasks,
   IconUsers,
@@ -19,10 +22,13 @@ export const NAV = [
   { to: '/contractors', label: 'Контрагенты', Icon: IconUsers, wip: true },
   { to: '/goods', label: 'Товары', Icon: IconPackage, wip: true },
   { to: '/employees', label: 'Сотрудники', Icon: IconId, wip: true },
-  { to: '/settings', label: 'Реквизиты и настройки', Icon: IconSettings },
+  { to: '/requisites', label: 'Реквизиты', Icon: IconBuilding },
+  { to: '/settings', label: 'Настройки', Icon: IconSettings },
 ] as const
 
 export function Sidebar() {
+  const { orgs, activeOrgId, setActiveOrgId, addOrg } = useOrg()
+
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-white">
       <div className="flex h-16 items-center gap-2.5 border-b border-line px-5">
@@ -61,13 +67,29 @@ export function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t border-line p-3">
+      {/* Переключатель организаций (твои ИП) */}
+      <div className="space-y-2 border-t border-line p-3">
+        <label className="block">
+          <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted">Организация</span>
+          <select
+            className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
+            value={activeOrgId}
+            onChange={(e) => setActiveOrgId(e.target.value)}
+          >
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name || 'Без названия'}
+              </option>
+            ))}
+          </select>
+        </label>
         <button
           type="button"
-          className="w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-xs transition-colors hover:bg-slate-100"
+          onClick={addOrg}
+          className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:border-brand-300 hover:text-brand-600"
         >
-          <div className="font-medium text-ink">ИП Демонстрация</div>
-          <div className="text-muted">УСН «Доходы» • демо-режим</div>
+          <IconPlus size={14} />
+          Добавить ИП
         </button>
       </div>
     </aside>
