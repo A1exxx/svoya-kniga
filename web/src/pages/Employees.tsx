@@ -6,6 +6,7 @@ import { formatRub } from '../lib/format'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
 import { sickBases, vacationBase12m } from '../lib/earnings'
 import { payrollSummary, employeeSalaryOptions } from '../lib/payrollSummary'
+import { validateSnils } from '../lib/validation'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -331,6 +332,9 @@ function StaffRoster({ year }: { year: number }) {
                   value={selected.snils ?? ''}
                   onChange={(e) => up({ snils: e.target.value })}
                 />
+                {validateSnils(selected.snils ?? '') && (
+                  <span className="mt-1 block text-xs text-danger">⚠ {validateSnils(selected.snils ?? '')}</span>
+                )}
               </Field>
               <Field label="Паспорт">
                 <input

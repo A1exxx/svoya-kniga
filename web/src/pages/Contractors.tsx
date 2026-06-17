@@ -8,6 +8,7 @@ import {
 import { Card, Field, Note, inputClass } from '../components/ui'
 import { formatDate } from '../lib/format'
 import { getDadataToken, isValidInnLength, lookupInn, innStatusInfo } from '../lib/innLookup'
+import { validateInn, validateKpp } from '../lib/validation'
 import { IconPlus } from '../components/icons'
 
 const TONE_CLS: Record<'ok' | 'warn' | 'danger', string> = {
@@ -170,6 +171,9 @@ export function Contractors() {
                     </button>
                   </div>
                   {innMsg && <span className="mt-1 block text-xs text-muted">{innMsg}</span>}
+                  {validateInn(selected.inn) && (
+                    <span className="mt-1 block text-xs text-danger">⚠ {validateInn(selected.inn)}</span>
+                  )}
                 </Field>
                 <Field label="КПП" hint={selected.type === 'ul' ? undefined : 'Только у юр. лиц'}>
                   <input
@@ -180,6 +184,9 @@ export function Contractors() {
                     disabled={selected.type !== 'ul'}
                     onChange={(e) => updateContractor(selected.id, { kpp: e.target.value.replace(/\D/g, '') })}
                   />
+                  {validateKpp(selected.kpp) && (
+                    <span className="mt-1 block text-xs text-danger">⚠ {validateKpp(selected.kpp)}</span>
+                  )}
                 </Field>
               </div>
 

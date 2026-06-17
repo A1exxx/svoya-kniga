@@ -8,7 +8,9 @@ import {
   ndflPeriodEntries,
   ndflEntriesTotal,
 } from './notifications.js'
+import { marginalNdflRatePct } from './notifications.js'
 import { calcSalary } from './payroll.js'
+import Decimal from 'decimal.js'
 
 describe('periodCodeNdfl — коды по всем месяцам', () => {
   it('январь: 1-я половина 21/01, 2-я 21/11', () => {
@@ -64,6 +66,27 @@ describe('сроки подачи', () => {
   })
   it('взносы за январь → до 25 февраля', () => {
     expect(dueDateContributions(2026, 1)).toBe('2026-02-25')
+  })
+})
+
+describe('marginalNdflRatePct — ступени по кумулятивному доходу', () => {
+  it('до 2.4 млн → 13%', () => expect(marginalNdflRatePct(new Decimal(2_000_000))).toBe(13))
+  it('2.4–5 млн → 15%', () => expect(marginalNdflRatePct(new Decimal(3_000_000))).toBe(15))
+  it('5–20 млн → 18%', () => expect(marginalNdflRatePct(new Decimal(6_000_000))).toBe(18))
+  it('свыше 50 млн → 22%', () => expect(marginalNdflRatePct(new Decimal(60_000_000))).toBe(22))
+})
+
+describe('ndflPeriodEntries — КБК по ступеням для высокого дохода', () => {
+  const salary = calcSalary(2026, 250_000, { months: 12 }) // 3 млн/год → переход 13%→15%
+  const entries = ndflPeriodEntries(salary)
+  it('первый месяц — 13%', () => {
+    expect(entries.find((e) => e.month === 1)?.ratePct).toBe(13)
+  })
+  it('есть записи со ставкой 15% (после перехода 2.4 млн)', () => {
+    expect(entries.some((e) => e.ratePct === 15)).toBe(true)
+  })
+  it('инвариант годовой суммы сохраняется', () => {
+    expect(ndflEntriesTotal(entries)).toBe(salary.ndfl_year.toNumber())
   })
 })
 

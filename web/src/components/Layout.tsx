@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { IconHelp, IconMenu } from './icons'
 import { Sidebar } from './Sidebar'
@@ -47,7 +47,9 @@ export function Layout() {
         </header>
 
         <main className="flex-1 overflow-auto">
-          <Outlet />
+          <Suspense fallback={<div className="px-6 py-8 text-sm text-muted">Загрузка…</div>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
 

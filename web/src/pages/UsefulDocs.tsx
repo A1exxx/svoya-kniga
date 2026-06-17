@@ -52,23 +52,32 @@ export function UsefulDocs() {
 
   const items: NItem[] = []
 
-  // НДФЛ — дважды в месяц, агрегировано по штату и сгруппировано по коду периода.
-  const ndflMap = new Map<string, { period: string; due: string; amount: number }>()
+  // НДФЛ — дважды в месяц, агрегировано по штату и сгруппировано по (коду периода + ставке/КБК).
+  // При прогрессии (доход через 2,4 млн) НДФЛ по разным ставкам идёт на разные КБК — отдельными строками.
+  const ndflMap = new Map<string, { period: string; due: string; ratePct: number; amount: number }>()
   for (const e of staff) {
     try {
       const sal = calcSalary(year, e.salary, employeeSalaryOptions(e))
       for (const en of ndflPeriodEntries(sal)) {
         if (en.amount <= 0) continue
-        const cur = ndflMap.get(en.period) ?? { period: en.period, due: en.due, amount: 0 }
+        const key = `${en.period}|${en.ratePct}`
+        const cur = ndflMap.get(key) ?? { period: en.period, due: en.due, ratePct: en.ratePct, amount: 0 }
         cur.amount += en.amount
-        ndflMap.set(en.period, cur)
+        ndflMap.set(key, cur)
       }
     } catch {
       /* пропускаем */
     }
   }
-  for (const r of [...ndflMap.values()].sort((a, b) => a.due.localeCompare(b.due))) {
-    items.push({ group: 'НДФЛ', title: `НДФЛ (период ${r.period})`, period: r.period, due: r.due, kbk: ndflKbk(13, year), amount: r.amount })
+  for (const r of [...ndflMap.values()].sort((a, b) => a.due.localeCompare(b.due) || a.ratePct - b.ratePct)) {
+    items.push({
+      group: 'НДФЛ',
+      title: `НДФЛ ${r.ratePct}% (период ${r.period})`,
+      period: r.period,
+      due: r.due,
+      kbk: ndflKbk(r.ratePct, year),
+      amount: r.amount,
+    })
   }
 
   // Взносы за работников — ежемесячно, кроме 3-го месяца квартала.
@@ -183,7 +192,7 @@ export function UsefulDocs() {
         <p className="mt-3 text-xs text-muted">
           НДФЛ — дважды в месяц (1–22 → до 25; 23–конец → до 3 числа след.); взносы — ежемесячно,
           кроме 3-го месяца квартала (там РСВ); авансы УСН — до 25 апреля/июля/октября. КБК НДФЛ
-          показан по ставке 13% (при прогрессии разбивается по ставкам — сверьте с бухгалтером).
+          при прогрессии (доход свыше 2,4 млн) разбивается по ставкам на разные КБК отдельными строками.
         </p>
       </Card>
 

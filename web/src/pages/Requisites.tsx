@@ -4,6 +4,7 @@ import { useOrg, type Org, type OrgVatMode } from '../state/orgStore'
 import { type UsnObject, calcVatUsn, getParams } from '../lib/taxcore'
 import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
 import { isPlaceholderName, orgDisplayName, requisitesProgress } from '../lib/orgDisplay'
+import { validateInn, validateOktmo, validateOgrnip } from '../lib/validation'
 import { Card, Field, Note, inputClass } from '../components/ui'
 
 /** Выбор ставки НДС — применяется сквозь всё приложение (счета, декларация, книга продаж). */
@@ -54,6 +55,11 @@ export function Requisites() {
   const [busy, setBusy] = useState(false)
   const [innMsg, setInnMsg] = useState<string | null>(null)
   const progress = requisitesProgress(o)
+  const issues = [
+    validateInn(o.inn),
+    validateOktmo(o.oktmo),
+    validateOgrnip(o.ogrnip),
+  ].filter((x): x is string => !!x)
 
   // Если «Краткое название» осталось плейсхолдером — подставляем «ИП {ФИО/ИНН}»,
   // чтобы ИП был виден в списке слева. Вызывается на blur ФИО и ИНН.
@@ -138,6 +144,7 @@ export function Requisites() {
                 <span className="text-muted"> · не хватает: {progress.missing.join(', ')}</span>
               )}
             </span>
+            {issues.length > 0 && <span className="text-danger">⚠ {issues.join('; ')}</span>}
           </div>
         </div>
         <div className="flex flex-col items-end gap-1.5">

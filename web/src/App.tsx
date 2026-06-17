@@ -1,20 +1,24 @@
+import { lazy } from 'react'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
-import { Taxes } from './pages/Taxes'
-import { Settings } from './pages/Settings'
-import { Requisites } from './pages/Requisites'
-import { Employees } from './pages/Employees'
-import { Money } from './pages/Money'
-import { Documents } from './pages/Documents'
-import { Contractors } from './pages/Contractors'
-import { Goods } from './pages/Goods'
-import { Reports } from './pages/Reports'
-import { Patent } from './pages/Patent'
-import { Archive } from './pages/Archive'
-import { TaxOffice } from './pages/TaxOffice'
-import { UsefulDocs } from './pages/UsefulDocs'
-import { Admin } from './pages/Admin'
+
+// Дашборд грузим сразу (стартовый экран), остальные страницы — лениво (code-splitting).
+// Suspense-граница — внутри Layout вокруг <Outlet/>, чтобы боковое меню не мигало при загрузке.
+const Taxes = lazy(() => import('./pages/Taxes').then((m) => ({ default: m.Taxes })))
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })))
+const Requisites = lazy(() => import('./pages/Requisites').then((m) => ({ default: m.Requisites })))
+const Employees = lazy(() => import('./pages/Employees').then((m) => ({ default: m.Employees })))
+const Money = lazy(() => import('./pages/Money').then((m) => ({ default: m.Money })))
+const Documents = lazy(() => import('./pages/Documents').then((m) => ({ default: m.Documents })))
+const Contractors = lazy(() => import('./pages/Contractors').then((m) => ({ default: m.Contractors })))
+const Goods = lazy(() => import('./pages/Goods').then((m) => ({ default: m.Goods })))
+const Reports = lazy(() => import('./pages/Reports').then((m) => ({ default: m.Reports })))
+const Patent = lazy(() => import('./pages/Patent').then((m) => ({ default: m.Patent })))
+const Archive = lazy(() => import('./pages/Archive').then((m) => ({ default: m.Archive })))
+const TaxOffice = lazy(() => import('./pages/TaxOffice').then((m) => ({ default: m.TaxOffice })))
+const UsefulDocs = lazy(() => import('./pages/UsefulDocs').then((m) => ({ default: m.UsefulDocs })))
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })))
 
 export default function App() {
   return (

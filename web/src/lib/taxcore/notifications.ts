@@ -9,7 +9,15 @@
  */
 import Decimal from 'decimal.js'
 import { shiftToWorkday, dateToIso, makeDate } from './money.js'
-import type { SalaryResult } from './payroll.js'
+import { NDFL_TIERS, type SalaryResult } from './payroll.js'
+
+/** Предельная (маржинальная) ставка НДФЛ, % при кумулятивной базе с начала года. */
+export function marginalNdflRatePct(cumBase: Decimal): number {
+  for (const [upper, rate] of NDFL_TIERS) {
+    if (upper === null || cumBase.lte(upper)) return rate.times(100).toNumber()
+  }
+  return NDFL_TIERS[NDFL_TIERS.length - 1][1].times(100).toNumber()
+}
 
 /** Префикс квартала по месяцу (1–12). */
 function quarterPrefix(month: number): number {
@@ -65,6 +73,8 @@ export interface NdflPeriodEntry {
   due: string
   kind: 'advance' | 'settlement'
   amount: number
+  /** Маржинальная ставка НДФЛ для этого месяца (определяет КБК): 13/15/18/20/22. */
+  ratePct: number
 }
 
 /**
@@ -76,8 +86,11 @@ export interface NdflPeriodEntry {
 export function ndflPeriodEntries(salary: SalaryResult): NdflPeriodEntry[] {
   const entries: NdflPeriodEntry[] = []
   const year = salary.year
+  let cumTaxable = new Decimal(0)
   for (const m of salary.months) {
     const month = m.month
+    cumTaxable = cumTaxable.plus(m.gross).minus(m.deduction_applied)
+    const ratePct = marginalNdflRatePct(cumTaxable)
     entries.push({
       month,
       half: 2,
@@ -85,6 +98,7 @@ export function ndflPeriodEntries(salary: SalaryResult): NdflPeriodEntry[] {
       due: dueDateNdfl(year, month, 2),
       kind: 'advance',
       amount: m.advance_ndfl.toNumber(),
+      ratePct,
     })
     // Окончательный расчёт попадает в 1-ю половину следующего месяца (декабрь — остаётся в году).
     const sMonth = month === 12 ? 12 : month + 1
@@ -96,6 +110,7 @@ export function ndflPeriodEntries(salary: SalaryResult): NdflPeriodEntry[] {
       due: dueDateNdfl(year, sMonth, sHalf),
       kind: 'settlement',
       amount: m.settlement_ndfl.toNumber(),
+      ratePct,
     })
   }
   return entries
