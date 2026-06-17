@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps, type Operation } from '../state/opsStore'
+import { useDocs, docTotals } from '../state/docsStore'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
@@ -25,6 +26,7 @@ const emptyDraft = (): Draft => ({
 export function Money() {
   const { activeOrg, updateActiveOrg } = useOrg()
   const { ops, addOp, removeOp, updateOp } = useOps()
+  const { docs, updateDoc } = useDocs()
   const [draft, setDraft] = useState<Draft>(emptyDraft())
   const [printKudir, setPrintKudir] = useState(false)
   const [applied, setApplied] = useState(false)
@@ -107,9 +109,27 @@ export function Money() {
         setImportMsg(errors.join(' '))
         return
       }
-      drafts.forEach((d) => addOp(d))
+      // Авто-привязка приходов к неоплаченным исходящим счетам по сумме.
+      const unpaid = docs.filter(
+        (x) => x.direction === 'outgoing' && x.type === 'invoice' && x.paymentStatus !== 'paid' && !x.linkedOpId
+      )
+      const used = new Set<string>()
+      let matched = 0
+      drafts.forEach((d) => {
+        const opId = addOp(d)
+        if (d.kind !== 'income') return
+        const inv = unpaid.find((x) => !used.has(x.id) && Math.abs(docTotals(x).subtotal - d.amount) < 0.01)
+        if (inv) {
+          used.add(inv.id)
+          updateDoc(inv.id, { paymentStatus: 'paid', paidDate: d.date, linkedOpId: opId })
+          matched++
+        }
+      })
       const inc = drafts.filter((d) => d.kind === 'income').length
-      setImportMsg(`Загружено операций: ${drafts.length} (приход ${inc}, расход ${drafts.length - inc}).`)
+      setImportMsg(
+        `Загружено операций: ${drafts.length} (приход ${inc}, расход ${drafts.length - inc})` +
+          (matched > 0 ? `; привязано к счетам: ${matched} (отмечены оплаченными)` : '') + '.'
+      )
     } catch (e) {
       setImportMsg('Не удалось прочитать файл: ' + (e as Error).message)
     }

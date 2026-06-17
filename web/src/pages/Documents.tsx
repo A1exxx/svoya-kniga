@@ -25,9 +25,11 @@ import { ContractDoc } from '../components/ContractDoc'
 import { WaybillDoc } from '../components/WaybillDoc'
 import { UpdDoc } from '../components/UpdDoc'
 import { SalesBookDoc } from '../components/SalesBookDoc'
+import { PurchaseBookDoc } from '../components/PurchaseBookDoc'
 import { VatDeclarationDoc } from '../components/VatDeclarationDoc'
 import { SendDemoModal } from '../components/SendDemoModal'
 import { compute } from '../lib/compute'
+import { calcVatUsn } from '../lib/taxcore'
 import { vatDeclarationXml, vatDeclarationFileName } from '../lib/vatDeclarationXml'
 import { downloadText } from '../lib/download'
 
@@ -62,15 +64,26 @@ export function Documents() {
   const { addOp, removeOp, ops } = useOps()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
-  const [vatView, setVatView] = useState<'book' | 'decl' | null>(null)
+  const [vatView, setVatView] = useState<'book' | 'purchase' | 'decl' | null>(null)
   const [vatSend, setVatSend] = useState(false)
   const [direction, setDirection] = useState<DocDirection>('outgoing')
   const incoming = direction === 'incoming'
 
+  // Входной НДС к вычету — из входящих документов со ставкой НДС (для общей ставки).
+  const inputVat = docs
+    .filter((d) => d.direction === 'incoming' && d.vatMode !== 'none')
+    .reduce((s, d) => s + docTotals(d).vat, 0)
+
   let vatRes: ReturnType<typeof compute>['vat'] = null
   if (activeOrg.vat) {
     try {
-      vatRes = compute(activeOrg, ops).vat
+      const c = compute(activeOrg, ops)
+      const vatIncome = c.quarterly ? c.byQuarter.reduce((s, q) => s + q.income, 0) : activeOrg.income
+      vatRes = calcVatUsn(activeOrg.year, vatIncome, {
+        mode: activeOrg.vatMode,
+        incomeIncludesVat: true,
+        inputVat,
+      })
     } catch {
       vatRes = null
     }
@@ -203,6 +216,13 @@ export function Documents() {
             </button>
             <button
               type="button"
+              onClick={() => setVatView('purchase')}
+              className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+            >
+              Книга покупок
+            </button>
+            <button
+              type="button"
               onClick={() => setVatView('decl')}
               className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
             >
@@ -227,13 +247,17 @@ export function Documents() {
             </button>
             {vatRes && !vatRes.exempt && vatRes.mode !== 'usn_lost' && (
               <span className="ml-auto text-sm text-muted">
+                {vatRes.input_vat_deducted.toNumber() > 0 && (
+                  <>входной НДС к вычету {formatRub(vatRes.input_vat_deducted.toNumber())} · </>
+                )}
                 НДС к уплате: <span className="tnum font-semibold text-ink">{formatRub(vatRes.vat.toNumber())}</span> · ставка {vatRes.rate.toNumber()}%
               </span>
             )}
           </div>
           <p className="mt-2 text-xs text-muted">
-            Книга продаж собирается из счетов/актов со ставкой НДС. Ставка по умолчанию — из «Реквизитов».
-            Реальная сдача НДС — только через оператора ЭДО (раздел «Налоговая»).
+            Книга продаж — из исходящих счетов/актов с НДС; книга покупок и вычет входного НДС — из
+            входящих документов с НДС (вычет только при общей ставке 20/22/10%). Ставка по умолчанию —
+            из «Реквизитов». Реальная сдача НДС — через оператора ЭДО (раздел «Налоговая»).
           </p>
         </Card>
       )}
@@ -473,6 +497,11 @@ export function Documents() {
       {vatView === 'book' && (
         <PrintModal title="Книга продаж — предпросмотр" onClose={() => setVatView(null)}>
           <SalesBookDoc org={activeOrg} docs={docs.filter((d) => d.direction === 'outgoing')} />
+        </PrintModal>
+      )}
+      {vatView === 'purchase' && (
+        <PrintModal title="Книга покупок — предпросмотр" onClose={() => setVatView(null)}>
+          <PurchaseBookDoc org={activeOrg} docs={docs} />
         </PrintModal>
       )}
       {vatView === 'decl' && vatRes && (
