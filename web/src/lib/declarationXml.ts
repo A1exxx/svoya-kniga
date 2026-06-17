@@ -63,35 +63,69 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
   const kbk = isIncome ? '18210501011011000110' : '18210501021011000110'
   const dateDoc = new Date().toLocaleDateString('ru-RU')
   const { fam, nam, otch } = splitFio(org.fio || org.name || '')
-  const p0 = computed.usn.periods[0]
+  const periods = computed.usn.periods
+  const quarterly = periods.length === 4
+  const yearP = periods[periods.length - 1]
+  const annualIncome = quarterly
+    ? computed.byQuarter.reduce((s, q) => s + q.income, 0)
+    : org.income
+  const annualExpense = quarterly
+    ? computed.byQuarter.reduce((s, q) => s + q.expense, 0)
+    : org.expenses
+  const pr = (i: number, fn: (p: (typeof periods)[number]) => { toNumber: () => number }) =>
+    rub(periods[i] ? fn(periods[i]) : 0)
 
   // --- Раздел расчёта (2.1.1 «доходы» или 2.2 «доходы−расходы») ---
-  // У нас годовой расчёт (один период) — заполняем годовые строки; поквартальные
-  // появятся при поквартальном учёте.
+  // При поквартальном учёте заполняем все строки по периодам; иначе — годовые.
   const calcSection = isIncome
     ? [
         `      <РасчНалог_Дох ПризнНП="${org.hasEmployees ? '2' : '1'}">`,
-        line('113', rub(p0.tax_base_cumulative)), // доходы за налоговый период
-        line('123', String(ratePct)), // ставка налога, %
-        line('133', rub(p0.tax_before_deduction_cumulative)), // налог исчисленный
-        line('143', rub(p0.deduction_cumulative)), // взносы, уменьшающие налог
+        ...(quarterly
+          ? [
+              line('110', pr(0, (p) => p.tax_base_cumulative)),
+              line('111', pr(1, (p) => p.tax_base_cumulative)),
+              line('112', pr(2, (p) => p.tax_base_cumulative)),
+              line('113', pr(3, (p) => p.tax_base_cumulative)),
+              line('123', String(ratePct)),
+              line('130', pr(0, (p) => p.tax_before_deduction_cumulative)),
+              line('131', pr(1, (p) => p.tax_before_deduction_cumulative)),
+              line('132', pr(2, (p) => p.tax_before_deduction_cumulative)),
+              line('133', pr(3, (p) => p.tax_before_deduction_cumulative)),
+              line('140', pr(0, (p) => p.deduction_cumulative)),
+              line('141', pr(1, (p) => p.deduction_cumulative)),
+              line('142', pr(2, (p) => p.deduction_cumulative)),
+              line('143', pr(3, (p) => p.deduction_cumulative)),
+            ]
+          : [
+              line('113', rub(yearP.tax_base_cumulative)),
+              line('123', String(ratePct)),
+              line('133', rub(yearP.tax_before_deduction_cumulative)),
+              line('143', rub(yearP.deduction_cumulative)),
+            ]),
         `      </РасчНалог_Дох>`,
       ]
     : [
         `      <РасчНалог_ДохРасх>`,
-        line('213', rub(org.income)), // доходы
-        line('223', rub(org.expenses)), // расходы
-        line('243', rub(p0.tax_base_cumulative)), // налоговая база
-        line('263', String(ratePct)), // ставка налога, %
-        line('273', rub(computed.usn.tax_year_computed)), // налог исчисленный
-        line('280', rub(computed.usn.min_tax)), // минимальный налог (1%)
+        line('213', rub(annualIncome)),
+        line('223', rub(annualExpense)),
+        line('243', rub(yearP.tax_base_cumulative)),
+        line('263', String(ratePct)),
+        line('273', rub(computed.usn.tax_year_computed)),
+        line('280', rub(computed.usn.min_tax)),
         `      </РасчНалог_ДохРасх>`,
       ]
 
   // --- Раздел 1.1 / 1.2 «Сумма налога к уплате» ---
   const sumSection = [
     `      <СумУСН ${isIncome ? 'Раздел="1.1"' : 'Раздел="1.2"'} КБК="${kbk}" ОКТМО="00000000">`,
-    line('100', rub(computed.usn.tax_year_final)), // налог к уплате за год
+    ...(quarterly
+      ? [
+          line('020', pr(0, (p) => p.advance_due_this_period)), // аванс за 1 квартал
+          line('040', pr(1, (p) => p.advance_due_this_period)), // аванс за полугодие
+          line('070', pr(2, (p) => p.advance_due_this_period)), // аванс за 9 месяцев
+          line('100', rub(computed.usn.year_payment_due)), // налог к доплате за год
+        ]
+      : [line('100', rub(computed.usn.tax_year_final))]),
     computed.usn.year_overpayment.toNumber() > 0
       ? line('110', rub(computed.usn.year_overpayment)) // к уменьшению
       : '',

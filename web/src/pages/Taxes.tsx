@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
+import { useOps } from '../state/opsStore'
 import { getParams, calcVatUsn, type UsnObject, type VatMode } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
@@ -26,6 +27,7 @@ const kindIcon = {
 
 export function Taxes() {
   const { activeOrg, updateActiveOrg } = useOrg()
+  const { ops } = useOps()
   const o = activeOrg
   const [modal, setModal] = useState<'decl' | 'ens' | 'send' | null>(null)
   const [sendTitle, setSendTitle] = useState('Декларация по УСН')
@@ -34,7 +36,7 @@ export function Taxes() {
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
   try {
-    computed = compute(o)
+    computed = compute(o, ops)
   } catch (e) {
     error = (e as Error).message
   }
@@ -211,6 +213,31 @@ export function Taxes() {
                   </p>
                 ))}
               </Card>
+
+              {computed.quarterly && (
+                <Card title="Авансы по кварталам (из операций)">
+                  <div className="mb-3 grid grid-cols-4 gap-2 text-center">
+                    {computed.byQuarter.map((q, i) => (
+                      <div key={i} className="rounded-lg bg-slate-50 px-2 py-2">
+                        <div className="text-xs text-muted">{q.label}</div>
+                        <div className="tnum text-sm font-medium text-ink">{formatRub(q.income)}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {computed.usn.periods.map((p, i) => (
+                    <Row
+                      key={i}
+                      label={i < 3 ? `Аванс за ${p.label}` : 'Налог за год (доплата)'}
+                      value={dec(p.advance_due_this_period)}
+                      strong={i === 3}
+                    />
+                  ))}
+                  <p className="mt-2 text-xs text-muted">
+                    Нарастающим итогом из доходов в «Деньгах»; взносы к вычету распределены
+                    равномерно по кварталам.
+                  </p>
+                </Card>
+              )}
 
               <Card title="Страховые взносы «за себя»">
                 <Row

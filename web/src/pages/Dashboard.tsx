@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
+import { useOps } from '../state/opsStore'
 import { Card } from '../components/ui'
 import { IconCheck, IconChevron, IconClock, IconSend } from '../components/icons'
 import { TaskWizardModal, type TaskEvent } from '../components/TaskWizardModal'
@@ -19,12 +20,13 @@ function startOfTodayMs(): number {
 
 export function Dashboard() {
   const { activeOrg } = useOrg()
+  const { ops } = useOps()
   const o = activeOrg
   const [wizard, setWizard] = useState<TaskEvent | null>(null)
 
   let c: ReturnType<typeof compute> | null = null
   try {
-    c = compute(o)
+    c = compute(o, ops)
   } catch {
     c = null
   }

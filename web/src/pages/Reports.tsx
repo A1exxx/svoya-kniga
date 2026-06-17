@@ -46,7 +46,7 @@ export function Reports() {
 
   let computed: ReturnType<typeof compute> | null = null
   try {
-    computed = compute(o)
+    computed = compute(o, ops)
   } catch {
     computed = null
   }

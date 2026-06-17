@@ -15,21 +15,37 @@ function Line({ code, label, value }: { code: string; label: string; value: stri
   )
 }
 
-/** Печатный предпросмотр декларации по УСН (КНД 1152017), заполненный из расчёта. */
+/** Печатный предпросмотр декларации по УСН (КНД 1152017), заполненный из расчёта.
+ *  При поквартальном расчёте (из «Денег») заполняются все строки по периодам. */
 export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed }) {
   const isIncome = org.usnObject === 'income'
-  const period = computed.usn.periods[0]
-  const taxName =
-    isIncome
-      ? 'Раздел 2.1.1. Расчёт налога (объект «Доходы»)'
-      : 'Раздел 2.2. Расчёт налога (объект «Доходы минус расходы»)'
+  const periods = computed.usn.periods
+  const quarterly = periods.length === 4
+  const yearP = periods[periods.length - 1] // годовой (последний) период
+  const ratePct = computed.usn.rate.times(100).toNumber()
+
+  // Доходы/расходы за год — из операций (если поквартально) или ручные.
+  const annualIncome = quarterly
+    ? computed.byQuarter.reduce((s, q) => s + q.income, 0)
+    : org.income
+  const annualExpense = quarterly
+    ? computed.byQuarter.reduce((s, q) => s + q.expense, 0)
+    : org.expenses
+
+  // Значение строки периода i (или «—», если периода нет).
+  const pv = (i: number, fn: (p: (typeof periods)[number]) => { toNumber: () => number }) =>
+    periods[i] ? v(fn(periods[i])) : '—'
+
+  const taxName = isIncome
+    ? 'Раздел 2.1.1. Расчёт налога (объект «Доходы»)'
+    : 'Раздел 2.2. Расчёт налога (объект «Доходы минус расходы»)'
 
   return (
     <div>
       <div className="text-center">
         <div className="text-base font-semibold">
-          Налоговая декларация по налогу, уплачиваемому в связи с применением
-          упрощённой системы налогообложения
+          Налоговая декларация по налогу, уплачиваемому в связи с применением упрощённой системы
+          налогообложения
         </div>
         <div className="mt-1 text-xs text-slate-500">Форма по КНД 1152017</div>
       </div>
@@ -56,7 +72,7 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
           </tr>
           <tr>
             <td className="py-1 text-slate-500">Ставка налога</td>
-            <td className="py-1 text-right font-medium">{computed.usn.rate.times(100).toNumber()}%</td>
+            <td className="py-1 text-right font-medium">{ratePct}%</td>
           </tr>
         </tbody>
       </table>
@@ -65,17 +81,35 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
       <table className="w-full">
         <tbody>
           {isIncome ? (
-            <>
-              <Line code="113" label="Сумма полученных доходов за налоговый период" value={v(period.tax_base_cumulative)} />
-              <Line code="123" label="Ставка налога (%)" value={`${computed.usn.rate.times(100).toNumber()}`} />
-              <Line code="133" label="Сумма исчисленного налога за год" value={v(period.tax_before_deduction_cumulative)} />
-              <Line code="143" label="Сумма страховых взносов, уменьшающая налог" value={v(period.deduction_cumulative)} />
-            </>
+            quarterly ? (
+              <>
+                <Line code="110" label="Доходы за 1 квартал" value={pv(0, (p) => p.tax_base_cumulative)} />
+                <Line code="111" label="Доходы за полугодие" value={pv(1, (p) => p.tax_base_cumulative)} />
+                <Line code="112" label="Доходы за 9 месяцев" value={pv(2, (p) => p.tax_base_cumulative)} />
+                <Line code="113" label="Доходы за год" value={pv(3, (p) => p.tax_base_cumulative)} />
+                <Line code="120–123" label="Ставка налога (%)" value={`${ratePct}`} />
+                <Line code="130" label="Налог за 1 квартал" value={pv(0, (p) => p.tax_before_deduction_cumulative)} />
+                <Line code="131" label="Налог за полугодие" value={pv(1, (p) => p.tax_before_deduction_cumulative)} />
+                <Line code="132" label="Налог за 9 месяцев" value={pv(2, (p) => p.tax_before_deduction_cumulative)} />
+                <Line code="133" label="Налог за год" value={pv(3, (p) => p.tax_before_deduction_cumulative)} />
+                <Line code="140" label="Взносы, уменьшающие налог, за 1 квартал" value={pv(0, (p) => p.deduction_cumulative)} />
+                <Line code="141" label="…за полугодие" value={pv(1, (p) => p.deduction_cumulative)} />
+                <Line code="142" label="…за 9 месяцев" value={pv(2, (p) => p.deduction_cumulative)} />
+                <Line code="143" label="…за год" value={pv(3, (p) => p.deduction_cumulative)} />
+              </>
+            ) : (
+              <>
+                <Line code="113" label="Сумма полученных доходов за налоговый период" value={v(yearP.tax_base_cumulative)} />
+                <Line code="123" label="Ставка налога (%)" value={`${ratePct}`} />
+                <Line code="133" label="Сумма исчисленного налога за год" value={v(yearP.tax_before_deduction_cumulative)} />
+                <Line code="143" label="Сумма страховых взносов, уменьшающая налог" value={v(yearP.deduction_cumulative)} />
+              </>
+            )
           ) : (
             <>
-              <Line code="213" label="Сумма полученных доходов за налоговый период" value={v(org.income)} />
-              <Line code="223" label="Сумма произведённых расходов" value={v(org.expenses)} />
-              <Line code="243" label="Налоговая база (доходы − расходы)" value={v(period.tax_base_cumulative)} />
+              <Line code="213" label="Сумма полученных доходов за налоговый период" value={v(annualIncome)} />
+              <Line code="223" label="Сумма произведённых расходов" value={v(annualExpense)} />
+              <Line code="243" label="Налоговая база (доходы − расходы)" value={v(yearP.tax_base_cumulative)} />
               <Line code="273" label="Сумма исчисленного налога" value={v(computed.usn.tax_year_computed)} />
               <Line code="280" label="Сумма минимального налога (1% от доходов)" value={v(computed.usn.min_tax)} />
             </>
@@ -88,9 +122,23 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
       </div>
       <table className="w-full">
         <tbody>
-          <Line code="100" label="Сумма налога, подлежащая уплате за налоговый период" value={v(computed.usn.tax_year_final)} />
-          {computed.usn.year_overpayment.toNumber() > 0 && (
-            <Line code="110" label="Сумма налога к уменьшению (переплата)" value={v(computed.usn.year_overpayment)} />
+          {quarterly ? (
+            <>
+              <Line code="020" label="Аванс к уплате за 1 квартал" value={pv(0, (p) => p.advance_due_this_period)} />
+              <Line code="040" label="Аванс к уплате за полугодие" value={pv(1, (p) => p.advance_due_this_period)} />
+              <Line code="070" label="Аванс к уплате за 9 месяцев" value={pv(2, (p) => p.advance_due_this_period)} />
+              <Line code="100" label="Налог к доплате за год" value={v(computed.usn.year_payment_due)} />
+              {computed.usn.year_overpayment.toNumber() > 0 && (
+                <Line code="110" label="Налог к уменьшению за год" value={v(computed.usn.year_overpayment)} />
+              )}
+            </>
+          ) : (
+            <>
+              <Line code="100" label="Сумма налога, подлежащая уплате за налоговый период" value={v(computed.usn.tax_year_final)} />
+              {computed.usn.year_overpayment.toNumber() > 0 && (
+                <Line code="110" label="Сумма налога к уменьшению (переплата)" value={v(computed.usn.year_overpayment)} />
+              )}
+            </>
           )}
         </tbody>
       </table>
@@ -102,8 +150,11 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
           Подпись: ______________ / {org.fio || org.name}
         </div>
         <div className="max-w-[60%] text-right">
-          Предпросмотр (демо-режим). Годовые показатели заполнены автоматически из расчёта;
-          поквартальные суммы — при поквартальном учёте. Перед подачей сверьте с бухгалтером.
+          Предпросмотр (демо-режим).{' '}
+          {quarterly
+            ? 'Поквартальные суммы заполнены из операций в «Деньгах».'
+            : 'Годовые показатели заполнены из расчёта; поквартальные — при учёте операций.'}{' '}
+          Перед подачей сверьте с бухгалтером.
         </div>
       </div>
     </div>
