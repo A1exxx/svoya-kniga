@@ -9,6 +9,7 @@ import { Money } from './pages/Money'
 import { Documents } from './pages/Documents'
 import { Contractors } from './pages/Contractors'
 import { Goods } from './pages/Goods'
+import { Reports } from './pages/Reports'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/taxes" element={<Taxes />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/requisites" element={<Requisites />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/money" element={<Money />} />

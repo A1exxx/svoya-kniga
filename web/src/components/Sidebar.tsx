@@ -7,6 +7,7 @@ import {
   IconId,
   IconPackage,
   IconPlus,
+  IconReport,
   IconSettings,
   IconTasks,
   IconUsers,
@@ -17,6 +18,7 @@ import {
 export const NAV = [
   { to: '/', label: 'Задачи и отчётность', Icon: IconTasks, end: true },
   { to: '/taxes', label: 'Налоги', Icon: IconCalc },
+  { to: '/reports', label: 'Отчётность', Icon: IconReport },
   { to: '/money', label: 'Деньги', Icon: IconWallet },
   { to: '/documents', label: 'Документы', Icon: IconDoc },
   { to: '/contractors', label: 'Контрагенты', Icon: IconUsers },
