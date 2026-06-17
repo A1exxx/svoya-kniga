@@ -28,7 +28,9 @@ export function compute(org: Org, ops: Operation[] = []) {
 
   // --- Годовой режим (нет операций): из ручных доходов/расходов ---
   if (yearOps.length === 0) {
-    const contr = calcContributions(org.year, org.income, org.expenses, org.usnObject)
+    const contr = calcContributions(org.year, org.income, org.expenses, org.usnObject, {
+      regDate: org.regDate || undefined,
+    })
     const deduct = org.usnObject === 'income' ? contr.total : 0
     const usn = usnQuick(org.year, org.usnObject, org.income, {
       expenses: org.expenses,
@@ -54,7 +56,9 @@ export function compute(org: Org, ops: Operation[] = []) {
   const annualIncome = incCum[3]
   const annualExpense = expCum[3]
 
-  const contr = calcContributions(org.year, annualIncome, annualExpense, org.usnObject)
+  const contr = calcContributions(org.year, annualIncome, annualExpense, org.usnObject, {
+    regDate: org.regDate || undefined,
+  })
   // Взносы к вычету (для «доходы») считаем уплаченными равномерно по кварталам —
   // это и рекомендует Эльба для равномерного уменьшения авансов.
   const totalDeduct = org.usnObject === 'income' ? contr.total.toNumber() : 0

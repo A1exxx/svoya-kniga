@@ -7,8 +7,45 @@ from decimal import Decimal
 
 from .models import UsnObject, money, shift_to_workday, to_decimal
 from .params import get_params
+from calendar import monthrange
 
 __all__ = ["ContributionsResult", "calc_contributions"]
+
+
+def _to_date(v):
+    if v is None:
+        return None
+    if isinstance(v, date):
+        return v
+    try:
+        y, m, d = str(v).split("-")
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
+def _prorated_fixed(year, fixed_annual, reg_date=None, close_date=None):
+    """Фиксированные взносы пропорционально дням деятельности в году (неполный год, ст. 430 НК)."""
+    start = date(year, 1, 1)
+    end = date(year, 12, 31)
+    rd = _to_date(reg_date)
+    cd = _to_date(close_date)
+    active_start = max(start, rd) if (rd and rd.year == year) else start
+    active_end = min(end, cd) if (cd and cd.year == year) else end
+    if active_start <= start and active_end >= end:
+        return to_decimal(fixed_annual), False
+    monthly = to_decimal(fixed_annual) / Decimal(12)
+    total = Decimal(0)
+    for m in range(1, 13):
+        dim = monthrange(year, m)[1]
+        ms = date(year, m, 1)
+        me = date(year, m, dim)
+        s = max(active_start, ms)
+        e = min(active_end, me)
+        if e >= s:
+            active_days = (e - s).days + 1
+            total += monthly * Decimal(active_days) / Decimal(dim)
+    return total, True
 
 
 @dataclass
@@ -31,6 +68,8 @@ def calc_contributions(
     income,
     expenses=None,
     usn_object: UsnObject = UsnObject.INCOME,
+    reg_date=None,
+    close_date=None,
 ) -> ContributionsResult:
     """Взносы ИП «за себя» за год.
 
@@ -67,15 +106,22 @@ def calc_contributions(
     if not p.verified:
         notes.append(f"Параметры {year} года не сверены (verified=False) — ОБЯЗАТЕЛЬНО проверить.")
 
+    fixed_amount, prorated = _prorated_fixed(year, p.fixed_contributions, reg_date, close_date)
+    if prorated:
+        notes.append(
+            "Фиксированные взносы уменьшены пропорционально периоду деятельности "
+            "(неполный год, ст. 430 НК РФ)."
+        )
+
     return ContributionsResult(
         year=year,
-        fixed=money(p.fixed_contributions),
+        fixed=money(fixed_amount),
         base_1pct=money(base_1pct),
         income_over_threshold=money(over),
         one_percent_uncapped=one_pct_uncapped,
         one_percent=money(one_pct),
         capped=capped,
-        total=money(p.fixed_contributions + one_pct),
+        total=money(fixed_amount + one_pct),
         fixed_due=shift_to_workday(date(year, 12, 28)),
         one_percent_due=shift_to_workday(date(year + 1, 7, 1)),
         notes=notes,

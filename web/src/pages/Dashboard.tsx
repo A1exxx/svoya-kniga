@@ -39,6 +39,11 @@ export function Dashboard() {
   const upcoming = events.filter((e) => e.days >= 0)
   const past = events.filter((e) => e.days < 0)
 
+  // Налоговая копилка: сколько откладывать с каждого поступления на налог + взносы.
+  const obligation = c ? c.usn.tax_year_final.toNumber() + c.contr.total.toNumber() : 0
+  const piggyIncome = c ? (c.quarterly ? c.byQuarter.reduce((s, q) => s + q.income, 0) : o.income) : 0
+  const piggyPct = piggyIncome > 0 ? Math.round((obligation / piggyIncome) * 1000) / 10 : 0
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -75,6 +80,28 @@ export function Dashboard() {
           <div className="text-xs text-muted">{o.hasEmployees ? 'с работниками' : 'без работников'}</div>
         </Card>
       </div>
+
+      {c && obligation > 0 && (
+        <div className="mb-6">
+          <Card title="Налоговая копилка">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="text-sm text-muted">Откладывайте с каждого поступления</div>
+                <div className="tnum mt-1 text-3xl font-semibold text-brand-600">{piggyPct}%</div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-muted">К срокам уплаты накопится</div>
+                <div className="tnum mt-1 text-2xl font-semibold text-ink">{formatRub(obligation)}</div>
+              </div>
+            </div>
+            <p className="mt-3 text-xs text-muted">
+              Налог УСН {dec(c.usn.tax_year_final)} + взносы {dec(c.contr.total)}. Откладывая{' '}
+              {piggyPct}% с каждого прихода, к 28 апреля и 28 декабря деньги уже будут отложены — как
+              «копилка» в Точке.
+            </p>
+          </Card>
+        </div>
+      )}
 
       <Card title="Актуальные задачи">
         <div className="space-y-1.5">

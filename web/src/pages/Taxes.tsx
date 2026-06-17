@@ -251,6 +251,11 @@ export function Taxes() {
                   value={dec(computed.contr.one_percent)}
                 />
                 <Row label="Итого взносов" value={dec(computed.contr.total)} strong />
+                {computed.contr.notes.map((n, i) => (
+                  <p key={i} className="mt-2 text-xs text-muted">
+                    {n}
+                  </p>
+                ))}
               </Card>
 
               <Card title="Налоговый календарь">
