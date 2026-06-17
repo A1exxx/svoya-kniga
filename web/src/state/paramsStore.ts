@@ -8,6 +8,7 @@
  */
 import Decimal from 'decimal.js'
 import { YEARS } from '../lib/taxcore'
+import { persistKey } from '../lib/storage/idb'
 
 const KEY = 'svoyakniga.paramOverrides.v1'
 
@@ -39,11 +40,9 @@ function load(): Overrides {
   }
 }
 function persist(o: Overrides) {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(o))
-  } catch {
-    /* ignore */
-  }
+  // Через persistKey — зеркалируется в IndexedDB. Иначе при очистке localStorage правки ставок
+  // налога молча терялись бы и расчёт тихо вернулся бы к дефолтам ст.430 НК.
+  persistKey(KEY, JSON.stringify(o))
 }
 
 function applyYear(year: number, fields: Partial<Record<NumField, number>>) {

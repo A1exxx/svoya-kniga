@@ -6,7 +6,7 @@ import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
 import { useDocs } from '../state/docsStore'
 import { useEmployees } from '../state/employeesStore'
-import { useArchive, archiveDocKindFromTitle } from '../state/archiveStore'
+import { useArchive, archiveDocKindFromTitle, makeArchiveSnapshot } from '../state/archiveStore'
 import { Card } from '../components/ui'
 import { IconCheck, IconChevron, IconClock, IconSend } from '../components/icons'
 import { TaskWizardModal, type TaskEvent } from '../components/TaskWizardModal'
@@ -62,8 +62,9 @@ export function Dashboard() {
       dueDate: e.due,
       submittedAt: new Date().toISOString().slice(0, 10),
       amount: e.amount != null ? e.amount.toNumber() : null,
-      // Снимок входных данных на момент сдачи — чтобы повторная печать показывала поданные цифры.
-      snapshot: { org: o, ops, docs, employees },
+      // Снимок входных данных на момент сдачи — чтобы повторная печать показывала поданные цифры
+      // (без тяжёлых картинок org — они не нужны для деклараций и раздувают хранилище).
+      snapshot: makeArchiveSnapshot(o, ops, docs, employees),
     })
 
   const TaskRow = ({ e, locked }: { e: Ev; locked?: boolean }) => {
@@ -229,13 +230,11 @@ export function Dashboard() {
       {past.length > 0 && (
         <div className="mt-5">
           <Card title="Прошедшие сроки">
-            <div className="space-y-1">
-              {past.map((e, i) => (
-                <div key={i} className="flex items-center gap-3 px-2 py-1.5 text-sm text-muted">
-                  <span className="tnum w-20 shrink-0 text-xs">{formatDate(e.due)}</span>
-                  <span className="flex-1 truncate">{e.title}</span>
-                  <span className="tnum">{dec(e.amount)}</span>
-                </div>
+            {/* Полноценные строки: по просроченной задаче тоже можно открыть мастер и нажать
+                «Сдано» (раньше это был read-only список — задача застревала навсегда). */}
+            <div className="space-y-1.5">
+              {past.map((e) => (
+                <TaskRow key={taskKey(e)} e={e} />
               ))}
             </div>
           </Card>

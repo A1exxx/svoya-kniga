@@ -37,7 +37,7 @@ const btnPrimary =
 const PAYROLL_META: Record<ReportType, { knd?: string; period: string; authority: string }> = {
   '6ndfl': { knd: '1151100', period: 'квартал / год', authority: 'ФНС' },
   rsv: { knd: '1151111', period: 'квартал', authority: 'ФНС' },
-  efs1: { knd: '1151162', period: 'по событию / год', authority: 'СФР' },
+  efs1: { period: 'по событию / год', authority: 'СФР' }, // форма СФР — кода КНД (классификатор ФНС) нет
   perssved: { knd: '1151162', period: 'месяц', authority: 'ФНС' },
 }
 

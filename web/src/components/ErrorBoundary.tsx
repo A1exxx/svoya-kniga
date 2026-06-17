@@ -20,8 +20,9 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
   componentDidCatch(error: Error, info: { componentStack?: string }) {
     logError({
       kind: 'react',
+      // componentStack — первым: он ценнее для React-ошибок, а stack режется по лимиту 2000.
       message: error.message,
-      stack: `${error.stack || ''}\n--- Компоненты ---${info?.componentStack || ''}`,
+      stack: `--- Компоненты ---\n${info?.componentStack || ''}\n--- Stack ---\n${error.stack || ''}`,
       where: typeof location !== 'undefined' ? location.hash : undefined,
     })
   }

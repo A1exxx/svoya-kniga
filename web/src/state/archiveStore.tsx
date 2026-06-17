@@ -77,7 +77,11 @@ export function ArchiveProvider({ children }: { children: ReactNode }) {
   const archivedKeys = new Set(records.map((r) => r.taskKey))
 
   const addArchive = (rec: Omit<ArchiveRecord, 'id'>) =>
-    setStore((s) => ({ ...s, [activeOrgId]: [{ id: makeId(), ...rec }, ...(s[activeOrgId] ?? [])] }))
+    setStore((s) => ({
+      ...s,
+      // Ограничиваем рост архива (со снимками каждая запись весит — не даём раздуть хранилище).
+      [activeOrgId]: [{ id: makeId(), ...rec }, ...(s[activeOrgId] ?? [])].slice(0, 300),
+    }))
 
   const removeArchive = (id: string) =>
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((r) => r.id !== id) }))
@@ -91,6 +95,24 @@ export function useArchive(): ArchiveCtxValue {
   const ctx = useContext(Ctx)
   if (!ctx) throw new Error('useArchive must be used within ArchiveProvider')
   return ctx
+}
+
+/**
+ * Снимок без тяжёлых base64-картинок org (logo/signature/stamp): они не нужны для повторной
+ * печати декларации/уведомления, но раздувают каждую запись Архива на сотни КБ → быстрее упирается
+ * в квоту localStorage. Для записей-уведомлений ops/docs/employees можно передать пустыми.
+ */
+export function makeArchiveSnapshot(
+  org: Org,
+  ops: Operation[] = [],
+  docs: Doc[] = [],
+  employees: Employee[] = []
+): ArchiveSnapshot {
+  const lean = { ...org }
+  delete (lean as Partial<Org>).logo
+  delete (lean as Partial<Org>).signature
+  delete (lean as Partial<Org>).stamp
+  return { org: lean, ops, docs, employees }
 }
 
 /** Определить, что за документ стоит за задачей календаря (для повторной печати). */

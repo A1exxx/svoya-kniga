@@ -95,7 +95,7 @@ export function PayrollReportDoc({
   if (type === 'efs1') {
     return (
       <div>
-        <Head org={org} title="Единая форма сведений (ЕФС-1)" knd="1151162" />
+        <Head org={org} title="Единая форма сведений (ЕФС-1) — в СФР" />
         <div className="mt-5 mb-2 font-semibold">Подраздел 1.1. Сведения о трудовой деятельности</div>
         <table className="w-full border-collapse text-[12.5px]">
           <thead>

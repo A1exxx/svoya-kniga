@@ -91,4 +91,19 @@ describe('computeInsights — аномалии и прогноз', () => {
   it('нет данных → нет инсайтов', () => {
     expect(computeInsights([], [], org(), TODAY)).toHaveLength(0)
   })
+
+  it('ловит падение выручки ДО НУЛЯ в середине года (Q1→Q2=0, при наличии Q3)', () => {
+    const ops = [
+      op({ date: '2026-02-01', amount: 100000, kind: 'income' }),
+      op({ date: '2026-08-01', amount: 50000, kind: 'income' }),
+    ]
+    const ins = computeInsights(ops, [], org(), new Date(2026, 11, 31))
+    expect(ins.some((i) => i.id.startsWith('drop-q'))).toBe(true)
+  })
+
+  it('ещё ненаступивший квартал (=0) НЕ считается обвалом', () => {
+    const ops = [op({ date: '2026-02-01', amount: 100000, kind: 'income' })] // только Q1
+    const ins = computeInsights(ops, [], org(), new Date(2026, 4, 1)) // май, Q2 ещё идёт
+    expect(ins.some((i) => i.id.startsWith('drop-q'))).toBe(false)
+  })
 })

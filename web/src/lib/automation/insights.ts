@@ -80,8 +80,12 @@ export function computeInsights(
     const qi = Math.floor((m - 1) / 3)
     if (qi >= 0 && qi < 4) q[qi] += o.amount
   }
-  for (let i = 1; i < 4; i++) {
-    if (q[i - 1] > 0 && q[i] > 0 && q[i] < q[i - 1] * 0.6) {
+  // Сравниваем только до ПОСЛЕДНЕГО квартала с данными — иначе ещё ненаступивший квартал (=0)
+  // ложно считался бы «обвалом». Зато падение до нуля в середине года теперь ловится.
+  let lastData = -1
+  for (let i = 0; i < 4; i++) if (q[i] > 0) lastData = i
+  for (let i = 1; i <= lastData; i++) {
+    if (q[i - 1] > 0 && q[i] < q[i - 1] * 0.6) {
       out.push({
         id: `drop-q${i + 1}`,
         level: 'info',

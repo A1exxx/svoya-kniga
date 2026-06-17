@@ -69,6 +69,8 @@ export function installGlobalErrorHandlers(): void {
   if (installed || typeof window === 'undefined') return
   installed = true
   window.addEventListener('error', (ev) => {
+    // ResizeObserver loop — нефатальный шум браузера; не засоряем им журнал (буфер 50).
+    if (typeof ev.message === 'string' && ev.message.includes('ResizeObserver')) return
     const err = ev.error as Error | undefined
     console.error('[svoyakniga] ошибка:', err || ev.message)
     logError({ kind: 'error', message: ev.message || String(err), stack: err?.stack, where: location.hash })

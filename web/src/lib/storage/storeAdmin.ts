@@ -129,11 +129,19 @@ export function listSnapshots(): Snapshot[] {
   }
 }
 
-function saveSnapshots(list: Snapshot[]): void {
+function saveSnapshots(list: Snapshot[]): boolean {
   try {
     localStorage.setItem(SNAPSHOTS_KEY, JSON.stringify(list.slice(0, MAX_SNAPSHOTS)))
-  } catch {
-    /* ignore (квота) */
+    return true
+  } catch (e) {
+    // Квота переполнена — снимок НЕ сохранён. Не молчим (иначе журнал врёт «создан»).
+    console.error('[svoyakniga] Не удалось сохранить снимок (хранилище переполнено):', e)
+    try {
+      window.dispatchEvent(new CustomEvent('svk:storage-error', { detail: { key: SNAPSHOTS_KEY } }))
+    } catch {
+      /* нет window */
+    }
+    return false
   }
 }
 
@@ -148,8 +156,8 @@ function captureData(): Record<string, string> {
 
 export function createSnapshot(label: string): Snapshot {
   const snap: Snapshot = { id: makeId(), label, createdAt: nowIso(), data: captureData() }
-  saveSnapshots([snap, ...listSnapshots()])
-  logAudit('Снимок создан', label)
+  const ok = saveSnapshots([snap, ...listSnapshots()])
+  logAudit(ok ? 'Снимок создан' : 'Снимок НЕ сохранён (хранилище переполнено)', label)
   return snap
 }
 

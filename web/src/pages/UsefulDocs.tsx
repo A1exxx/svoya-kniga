@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
-import { useDocs } from '../state/docsStore'
 import { useEmployees } from '../state/employeesStore'
-import { useArchive } from '../state/archiveStore'
+import { useArchive, makeArchiveSnapshot } from '../state/archiveStore'
 import { isActiveInYear, employeeSalaryOptions } from '../lib/payrollSummary'
 import {
   calcSalary,
@@ -37,7 +36,6 @@ interface NItem {
 export function UsefulDocs() {
   const { activeOrg } = useOrg()
   const { ops } = useOps()
-  const { docs } = useDocs()
   const { employees } = useEmployees()
   const { addArchive } = useArchive()
   const [preview, setPreview] = useState<NItem | null>(null)
@@ -139,7 +137,8 @@ export function UsefulDocs() {
       amount: Math.round(it.amount),
       // Строка уведомления — чтобы «Открыть» в Архиве перерисовало КНД 1110355, а не вело в тупик.
       notificationRow: { kbk: it.kbk, oktmo, period: it.period, year, amount: Math.round(it.amount), title: it.title },
-      snapshot: { org: activeOrg, ops, docs, employees },
+      // Для записи-уведомления нужен только org (заголовок) — ops/docs/employees не читаются.
+      snapshot: makeArchiveSnapshot(activeOrg),
     })
 
   return (

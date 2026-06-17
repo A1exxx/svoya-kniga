@@ -41,12 +41,14 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
     : adv.map((a) => ({ period: a.period, sum: rub(a.amount) }))
 
   const oktmo = org.oktmo || '00000000'
-  const obXml = obligations
-    .map(
-      (o) =>
-        `      <СведОбяз КБК="${kbk}" ОКТМО="${esc(oktmo)}" Период="${o.period}" ОтчетГод="${org.year}" Сумма="${o.sum}"/>`
-    )
-    .join('\n')
+  const obXml = obligations.length
+    ? obligations
+        .map(
+          (o) =>
+            `      <СведОбяз КБК="${kbk}" ОКТМО="${esc(oktmo)}" Период="${o.period}" ОтчетГод="${org.year}" Сумма="${o.sum}"/>`
+        )
+        .join('\n')
+    : '      <!-- Поквартальных авансов нет: годовой налог подаётся декларацией, не уведомлением. -->'
   const annualNote = annualOnly
     ? '\n  <!-- Годовой режим: суммы авансов поквартально не разнесены. Годовой налог УСН подаётся декларацией, не уведомлением. -->'
     : ''
