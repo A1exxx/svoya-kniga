@@ -28,10 +28,22 @@ export function Admin() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [importMode, setImportMode] = useState<'replace' | 'merge'>('replace')
   const [msg, setMsg] = useState<string | null>(null)
+  const [auditSearch, setAuditSearch] = useState('')
+  const [auditType, setAuditType] = useState('')
 
   const snapshots = listSnapshots()
   const audit = listAudit()
   const usage = storageUsage()
+
+  const AUDIT_TYPES = ['ИП', 'Сотрудник', 'Операция', 'Документ', 'Контрагент', 'Номенклатура', 'Снимок', 'копи']
+  const filteredAudit = audit.filter((a) => {
+    if (auditType && !a.action.includes(auditType)) return false
+    if (auditSearch) {
+      const q = auditSearch.toLowerCase()
+      if (!`${a.action} ${a.detail}`.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
 
   const onRestore = (id: string) => {
     if (!window.confirm('Откатить данные к этому снимку? Текущее состояние сохранится как «перед откатом».')) return
@@ -158,15 +170,40 @@ export function Admin() {
           {audit.length === 0 ? (
             <p className="text-sm text-muted">Журнал пуст. Здесь фиксируются снимки, откаты, импорт/экспорт.</p>
           ) : (
-            <div className="max-h-72 space-y-0.5 overflow-auto">
-              {audit.map((a) => (
-                <div key={a.id} className="flex items-baseline gap-3 border-b border-line/50 py-1 text-sm">
-                  <span className="tnum w-36 shrink-0 text-xs text-muted">{dt(a.at)}</span>
-                  <span className="font-medium text-ink">{a.action}</span>
-                  <span className="truncate text-muted">{a.detail}</span>
+            <>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <input
+                  className={`${inputClass} max-w-[220px]`}
+                  placeholder="Поиск по журналу…"
+                  value={auditSearch}
+                  onChange={(e) => setAuditSearch(e.target.value)}
+                />
+                <select className={`${inputClass} max-w-[170px]`} value={auditType} onChange={(e) => setAuditType(e.target.value)}>
+                  <option value="">Все сущности</option>
+                  {AUDIT_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t === 'копи' ? 'Резервные копии' : t}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-muted">
+                  {filteredAudit.length} из {audit.length}
+                </span>
+              </div>
+              {filteredAudit.length === 0 ? (
+                <p className="text-sm text-muted">Ничего не найдено по фильтру.</p>
+              ) : (
+                <div className="max-h-72 space-y-0.5 overflow-auto">
+                  {filteredAudit.map((a) => (
+                    <div key={a.id} className="flex items-baseline gap-3 border-b border-line/50 py-1 text-sm">
+                      <span className="tnum w-36 shrink-0 text-xs text-muted">{dt(a.at)}</span>
+                      <span className="font-medium text-ink">{a.action}</span>
+                      <span className="truncate text-muted">{a.detail}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
           <p className="mt-3 text-xs text-muted">
             Журнал фиксирует каждое действие: создание/изменение/удаление ИП, сотрудников, операций,

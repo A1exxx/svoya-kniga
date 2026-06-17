@@ -16,10 +16,15 @@ import Decimal from 'decimal.js';
 import { roundRub, toDecimal, type DecimalLike } from './money.js';
 import { getParams } from './params.js';
 
-// Историч. дефолты (2025). Фактические пороги/ставка берутся из параметров года (getParams):
-// с 2026 порог освобождения 20 млн ₽ и общая ставка 22% (ФЗ № 425-ФЗ).
+/**
+ * @deprecated Историч. дефолты 2025 года. НЕ использовать в расчётах — фактические пороги/ставка
+ * берутся из параметров года через getParams(year) (с 2026: освобождение 20 млн, общая 22%, ФЗ-425).
+ * Оставлены только для обратной совместимости тестов; для логики всегда getParams.
+ */
 export const VAT_EXEMPT_THRESHOLD = new Decimal('60000000');
+/** @deprecated См. VAT_EXEMPT_THRESHOLD — используйте getParams(year).vat_rate5_limit. */
 export const VAT_RATE5_LIMIT = new Decimal('250000000');
+/** @deprecated См. VAT_EXEMPT_THRESHOLD — используйте getParams(year).vat_rate7_limit. */
 export const VAT_RATE7_LIMIT = new Decimal('450000000');
 
 /** Режим НДС. Спец-ставки 5/7 — без вычета; 10/общая — с вычетом. `general` = ставка года. */
