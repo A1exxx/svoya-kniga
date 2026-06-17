@@ -7,7 +7,7 @@ const r = (n: number) => formatRub(n, { kopecks: true })
 /** Книга покупок — входящие документы с НДС (входной НДС к вычету при общей ставке). */
 export function PurchaseBookDoc({ org, docs }: { org: Org; docs: Doc[] }) {
   const rows = docs
-    .filter((d) => d.direction === 'incoming' && d.vatMode !== 'none')
+    .filter((d) => d.direction === 'incoming' && d.vatMode !== 'none' && d.date.startsWith(String(org.year)))
     .map((d) => ({ d, t: docTotals(d) }))
   const totalWithVat = rows.reduce((s, x) => s + x.t.subtotal, 0)
   const totalVat = rows.reduce((s, x) => s + x.t.vat, 0)

@@ -38,10 +38,22 @@ export interface VatBooks {
   purchases: VatBookLine[] // раздел 8 — приобретения (входящие)
 }
 
-export function buildVatBooks(docs: Doc[]): VatBooks {
+/**
+ * Книги за период. ВАЖНО: фильтруем по году (по дате документа), иначе разделы 8/9 декларации
+ * рассинхронизируются с базой раздела 3 (она считается по операциям года). quarter (1–4) —
+ * опционально, для квартальной декларации НДС.
+ */
+export function buildVatBooks(docs: Doc[], year: number, quarter?: number): VatBooks {
+  const inPeriod = (d: Doc) => {
+    if (!d.date.startsWith(String(year))) return false
+    if (!quarter) return true
+    const m = Number(d.date.slice(5, 7))
+    return Math.floor((m - 1) / 3) + 1 === quarter
+  }
+  const period = docs.filter(inPeriod)
   return {
-    sales: toLines(docs.filter((d) => d.direction === 'outgoing')),
-    purchases: toLines(docs.filter((d) => d.direction === 'incoming')),
+    sales: toLines(period.filter((d) => d.direction === 'outgoing')),
+    purchases: toLines(period.filter((d) => d.direction === 'incoming')),
   }
 }
 

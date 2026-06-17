@@ -75,8 +75,8 @@ export function Documents() {
     .filter((d) => d.direction === 'incoming' && d.vatMode !== 'none')
     .reduce((s, d) => s + docTotals(d).vat, 0)
 
-  // Книги продаж/покупок (раздел 9 / раздел 8 декларации НДС).
-  const vatBooks = buildVatBooks(docs)
+  // Книги продаж/покупок (раздел 9 / раздел 8 декларации НДС) — за год активного ИП.
+  const vatBooks = buildVatBooks(docs, activeOrg.year)
 
   let vatRes: ReturnType<typeof compute>['vat'] = null
   if (activeOrg.vat) {

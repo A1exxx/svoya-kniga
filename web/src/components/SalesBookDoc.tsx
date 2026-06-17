@@ -7,7 +7,7 @@ const r = (n: number) => formatRub(n, { kopecks: true })
 /** Книга продаж — реализация с НДС за период (документы со ставкой НДС). */
 export function SalesBookDoc({ org, docs }: { org: Org; docs: Doc[] }) {
   const rows = docs
-    .filter((d) => d.vatMode !== 'none')
+    .filter((d) => d.vatMode !== 'none' && d.date.startsWith(String(org.year)))
     .map((d) => ({ d, t: docTotals(d) }))
   const totalWithVat = rows.reduce((s, x) => s + x.t.subtotal, 0)
   const totalVat = rows.reduce((s, x) => s + x.t.vat, 0)

@@ -150,12 +150,20 @@ export function usnCalendar(
     );
   }
 
-  // НДС поквартально (когда плательщик НДС).
+  // НДС поквартально (когда плательщик НДС): декларация до 25, уплата до 28 числа след. месяца.
   if (opts.vat) {
-    events.push(
-      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'Декларация по НДС за 4 квартал', null, 'поквартально, через оператора ЭДО'),
-      makeEvent(makeDate(taxYear + 1, 1, 28), 'payment', 'Уплата НДС за 4 квартал', null, 'НДС платится поквартально до 28 числа'),
-    );
+    const vatQuarters: { q: number; y: number; m: number }[] = [
+      { q: 1, y: taxYear, m: 4 },
+      { q: 2, y: taxYear, m: 7 },
+      { q: 3, y: taxYear, m: 10 },
+      { q: 4, y: taxYear + 1, m: 1 },
+    ];
+    for (const { q, y, m } of vatQuarters) {
+      events.push(
+        makeEvent(makeDate(y, m, 25), 'report', `Декларация по НДС за ${q} квартал`, null, 'поквартально, через оператора ЭДО'),
+        makeEvent(makeDate(y, m, 28), 'payment', `Уплата НДС за ${q} квартал`, null, 'НДС платится поквартально до 28 числа'),
+      );
+    }
   }
 
   // Если по итогам года образовалась переплата — отдельным информационным событием.
