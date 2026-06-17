@@ -23,6 +23,7 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
 
   return (
     <div>
+      {org.logo && <img src={org.logo} alt="Логотип" className="mb-3 max-h-14 object-contain" />}
       <div className="text-lg font-semibold">{title}</div>
 
       <table className="mt-4 w-full text-[12.5px]">
@@ -108,8 +109,20 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
 
       <div className="mt-10 flex justify-between text-[12.5px]">
         <div>
-          {sellerLabel}: ______________ / {org.fio || org.name}
-          <div className="mt-1 text-slate-400">М.П.</div>
+          <div className="flex items-end gap-1.5">
+            <span>{sellerLabel}:</span>
+            {org.signature ? (
+              <img src={org.signature} alt="Подпись" className="h-9 object-contain" />
+            ) : (
+              <span>______________</span>
+            )}
+            <span>/ {org.fio || org.name}</span>
+          </div>
+          {org.stamp ? (
+            <img src={org.stamp} alt="Печать" className="mt-1 h-16 object-contain" />
+          ) : (
+            <div className="mt-1 text-slate-400">М.П.</div>
+          )}
         </div>
         {!isInvoice && (
           <div>

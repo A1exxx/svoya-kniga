@@ -41,6 +41,13 @@ export function Requisites() {
     setInnMsg('Реквизиты заполнены по ИНН ✓')
   }
 
+  const onImage = (key: 'logo' | 'signature' | 'stamp', file?: File) => {
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => updateActiveOrg({ [key]: reader.result as string } as Partial<Org>)
+    reader.readAsDataURL(file)
+  }
+
   const text = (key: keyof typeof o, label: string, placeholder = '', hint?: string) => (
     <Field label={label} hint={hint}>
       <input
@@ -100,6 +107,56 @@ export function Requisites() {
             {text('bankAccount', 'Расчётный счёт', '40802810...')}
             {text('bik', 'БИК банка', '044525...')}
             <div className="sm:col-span-2">{text('bankName', 'Название банка', 'Т-Банк / Сбербанк / ...')}</div>
+          </div>
+        </Card>
+
+        <Card title="Брендинг для счетов и актов">
+          <div className="grid gap-4 sm:grid-cols-3">
+            {(
+              [
+                ['logo', 'Логотип'],
+                ['signature', 'Подпись (факсимиле)'],
+                ['stamp', 'Печать'],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key}>
+                <div className="mb-1.5 text-sm font-medium text-ink">{label}</div>
+                <div className="flex h-20 items-center justify-center rounded-lg border border-dashed border-line bg-slate-50">
+                  {o[key] ? (
+                    <img src={o[key]} alt={label} className="max-h-16 max-w-full object-contain" />
+                  ) : (
+                    <span className="text-xs text-muted">не загружено</span>
+                  )}
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <label className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50">
+                    Загрузить
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => onImage(key, e.target.files?.[0])}
+                    />
+                  </label>
+                  {o[key] && (
+                    <button
+                      type="button"
+                      onClick={() => updateActiveOrg({ [key]: undefined } as Partial<Org>)}
+                      className="rounded-lg border border-line px-3 py-1.5 text-xs text-slate-400 transition-colors hover:text-danger"
+                    >
+                      Убрать
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <Note>
+              Логотип появится в шапке счёта/акта, подпись и печать — у строки подписи. Тогда счёт
+              можно отправить клиенту без ручной печати-подписи-скана. Картинки до ~300 КБ, хранятся
+              локально.
+            </Note>
           </div>
         </Card>
 

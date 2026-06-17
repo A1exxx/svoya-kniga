@@ -16,6 +16,10 @@ export interface Org {
   bankAccount: string
   bik: string
   bankName: string
+  // Брендинг для печатных форм (data URL изображения)
+  logo?: string
+  signature?: string
+  stamp?: string
   // Система налогообложения
   usnObject: UsnObject
   regionalRate: number | null // ставка в %, null = базовая из параметров
