@@ -13,6 +13,7 @@ from .params import DEFAULT_YEAR, YEARS, YearParams, get_params
 from .vznosy import ContributionsResult, calc_contributions
 from .usn import PeriodData, PeriodResult, UsnYearResult, calc_usn, usn_quick
 from .ens import CalendarEvent, usn_calendar
+from .vat import VatResult, calc_vat_usn
 from .payroll import (
     PAYROLL,
     AlimonyResult,
@@ -41,6 +42,8 @@ __all__ = [
     "PeriodData", "PeriodResult", "UsnYearResult", "calc_usn", "usn_quick",
     # ens
     "CalendarEvent", "usn_calendar",
+    # vat
+    "VatResult", "calc_vat_usn",
     # payroll
     "PayrollParams", "PAYROLL", "get_payroll", "ndfl_progressive", "child_deduction_monthly",
     "SalaryMonth", "SalaryResult", "calc_salary",

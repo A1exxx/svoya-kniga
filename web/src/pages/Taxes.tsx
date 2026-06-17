@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
-import { getParams, type UsnObject } from '../lib/taxcore'
+import { getParams, calcVatUsn, type UsnObject, type VatMode } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -29,6 +29,7 @@ export function Taxes() {
   const o = activeOrg
   const [modal, setModal] = useState<'decl' | 'ens' | 'send' | null>(null)
   const [sendTitle, setSendTitle] = useState('Декларация по УСН')
+  const [vatMode, setVatMode] = useState<VatMode>('auto')
 
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
@@ -47,6 +48,13 @@ export function Taxes() {
   })()
 
   const isIncome = o.usnObject === 'income'
+
+  let vatRes: ReturnType<typeof calcVatUsn> | null = null
+  try {
+    vatRes = calcVatUsn(o.year, o.income, { mode: vatMode })
+  } catch {
+    vatRes = null
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -237,6 +245,55 @@ export function Taxes() {
                     )
                   })}
                 </div>
+              </Card>
+
+              <Card title="НДС (для УСН с 2025 года)">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {(
+                    [
+                      ['auto', 'Авто'],
+                      ['none', 'Без НДС'],
+                      ['rate5', '5%'],
+                      ['rate7', '7%'],
+                      ['general20', '20%'],
+                    ] as [VatMode, string][]
+                  ).map(([val, label]) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setVatMode(val)}
+                      className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                        vatMode === val
+                          ? 'border-brand-500 bg-brand-50 text-brand-600'
+                          : 'border-line text-muted hover:border-slate-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {vatRes && vatRes.exempt ? (
+                  <Note>
+                    Освобождён от НДС: годовой доход {formatRub(o.income)} ≤ 60 млн ₽ (ст. 145 НК РФ).
+                    Большинству ИП на УСН НДС платить не нужно.
+                  </Note>
+                ) : vatRes ? (
+                  <>
+                    <Row label="Ставка НДС" value={`${vatRes.rate.toNumber()}%`} />
+                    <Row label="Налоговая база (без НДС)" value={dec(vatRes.base)} />
+                    <Row label="НДС к уплате" value={dec(vatRes.vat)} strong />
+                    {vatRes.notes.map((n, i) => (
+                      <p key={i} className="mt-2 text-xs text-muted">
+                        {n}
+                      </p>
+                    ))}
+                  </>
+                ) : null}
+                <p className="mt-3 text-xs text-muted">
+                  С 2025 ИП на УСН платят НДС при доходе свыше 60 млн ₽/год: спец-ставки 5%
+                  (60–250 млн) и 7% (250–450 млн) без вычета входящего, либо общая 20% с вычетом.
+                  Доход берётся из расчёта выше; режим «Авто» подбирает ставку по порогу.
+                </p>
               </Card>
 
               <Card title="Отчётность и отправка">

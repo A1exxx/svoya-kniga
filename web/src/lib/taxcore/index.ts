@@ -10,3 +10,4 @@ export * from './vznosy.js';
 export * from './usn.js';
 export * from './ens.js';
 export * from './payroll.js';
+export * from './vat.js';
