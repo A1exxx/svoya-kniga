@@ -34,6 +34,14 @@ function op(date: string, amount: number, kind: 'income' | 'expense' = 'income')
   return { id: date + amount, date, kind, amount, counterparty: '', doc: '', note: '', taxable: true }
 }
 
+describe('compute — календарь НДС за все 4 квартала (при vat=true)', () => {
+  const r = compute(makeOrg({ vat: true, vatMode: 'general', income: 30_000_000 }))
+  const vatDecl = r.calendar.filter((e) => e.title.includes('Декларация по НДС'))
+  it('4 декларации НДС (Q1–Q4), а не только Q4', () => expect(vatDecl.length).toBe(4))
+  it('есть уплата НДС за 1 квартал', () =>
+    expect(r.calendar.some((e) => e.title.includes('Уплата НДС за 1 квартал'))).toBe(true))
+})
+
 describe('compute — годовой режим (нет операций)', () => {
   const r = compute(makeOrg({ income: 2_400_000 }))
 

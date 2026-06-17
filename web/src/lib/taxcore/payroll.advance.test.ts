@@ -57,3 +57,23 @@ describe('calcSalary — advancePercent 0 → прежнее поведение 
     expect(r2.months[0].settlement_ndfl.toNumber()).toBe(r2.months[0].ndfl.toNumber())
   })
 })
+
+describe('calcSalary — аванс + детский вычет одновременно (ранее непокрытый угол)', () => {
+  // Вычет применяется на этапе расчёта (как 1С), не на авансе. Инвариант и годовой итог
+  // не должны измениться от наличия аванса.
+  const withAdv = calcSalary(2026, 250_000, { advancePercent: 0.3, children: 2, months: 12 })
+  const noAdv = calcSalary(2026, 250_000, { advancePercent: 0, children: 2, months: 12 })
+
+  it('инвариант аванс+расчёт==НДФЛ в каждом месяце', () => {
+    for (const m of withAdv.months) {
+      expect(m.advance_ndfl.plus(m.settlement_ndfl).toNumber()).toBe(m.ndfl.toNumber())
+    }
+  })
+  it('годовой НДФЛ не зависит от наличия аванса (вычет не двоится)', () => {
+    expect(withAdv.ndfl_year.toNumber()).toBe(noAdv.ndfl_year.toNumber())
+  })
+  it('детский вычет применён (НДФЛ меньше, чем без детей)', () => {
+    const noKids = calcSalary(2026, 250_000, { advancePercent: 0.3, children: 0, months: 12 })
+    expect(withAdv.ndfl_year.toNumber()).toBeLessThan(noKids.ndfl_year.toNumber())
+  })
+})

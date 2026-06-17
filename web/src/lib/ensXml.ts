@@ -80,3 +80,51 @@ export function ensFileName(org: Org): string {
   const inn = org.inn || 'IP'
   return `Уведомление_ЕНС_${inn}_${org.year}.xml`
 }
+
+/** Одна строка обязательства уведомления (КНД 1110355): любой налог/взнос, не только УСН. */
+export interface EnsObligation {
+  kbk: string
+  oktmo: string
+  period: string
+  year: number
+  amount: number
+  title?: string
+}
+
+/**
+ * Мультистрочное уведомление КНД 1110355 из готовых обязательств — НДФЛ (по периодам),
+ * страховые взносы и авансы УСН (раздел «Полезные документы»). В отличие от ensNotificationXml
+ * (только УСН-авансы из календаря) принимает любые строки.
+ */
+export function notificationXml(org: Org, rows: EnsObligation[]): string {
+  const dateDoc = new Date().toLocaleDateString('ru-RU')
+  const { fam, nam, otch } = splitFio(org.fio || org.name || '')
+  let guid = 'DEMO0000-0000-0000-0000-000000000000'
+  try {
+    guid = crypto.randomUUID().toUpperCase()
+  } catch {
+    /* ignore */
+  }
+  const obXml = rows
+    .map(
+      (o) =>
+        `      <СведОбяз КБК="${esc(o.kbk)}" ОКТМО="${esc(o.oktmo)}" Период="${esc(o.period)}" ОтчетГод="${o.year}" Сумма="${rub(o.amount)}"/>`
+    )
+    .join('\n')
+  return [
+    `<?xml version="1.0" encoding="UTF-8"?>`,
+    `<!-- ДЕМО-генерация формата ФНС. Перед отправкой сверить с XSD на format.nalog.ru. -->`,
+    `<Файл ИдФайл="UT_UVNALOG_0000_0000_${esc(org.inn || '000000000000')}_${guid}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
+    `  <Документ КНД="1110355" ДатаДок="${esc(dateDoc)}" КодНО="0000">`,
+    `    <СвНП>`,
+    `      <НПФЛ ИННФЛ="${esc(org.inn || '')}">`,
+    `        <ФИО Фамилия="${esc(fam)}" Имя="${esc(nam)}"${otch ? ` Отчество="${esc(otch)}"` : ''}/>`,
+    `      </НПФЛ>`,
+    `    </СвНП>`,
+    `    <Уведомление>`,
+    obXml,
+    `    </Уведомление>`,
+    `  </Документ>`,
+    `</Файл>`,
+  ].join('\n')
+}

@@ -17,6 +17,8 @@ import {
   getKbk,
 } from '../lib/taxcore'
 import { compute } from '../lib/compute'
+import { notificationXml, ensFileName } from '../lib/ensXml'
+import { downloadText } from '../lib/download'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Note } from '../components/ui'
 import { PrintModal } from '../components/PrintModal'
@@ -179,6 +181,21 @@ export function UsefulDocs() {
                       <div className="flex justify-end gap-1.5">
                         <button type="button" onClick={() => setPreview(it)} className="cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50">
                           Сформировать
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            downloadText(
+                              ensFileName(activeOrg),
+                              notificationXml(activeOrg, [
+                                { kbk: it.kbk, oktmo, period: it.period, year, amount: Math.round(it.amount), title: it.title },
+                              ]),
+                              'application/xml;charset=utf-8'
+                            )
+                          }
+                          className="cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50"
+                        >
+                          XML
                         </button>
                         <button type="button" onClick={() => setSend(`Уведомление: ${it.title}`)} className="cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs font-medium text-ink hover:border-brand-300 hover:bg-brand-50">
                           Отправить

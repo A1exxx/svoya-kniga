@@ -234,10 +234,19 @@ export function importBackup(json: string, mode: 'replace' | 'merge'): { ok: boo
 
 // ---------- Хранилище ----------
 
+/** Размер строки в БАЙТАХ (UTF-8), а не в символах — иначе кириллица занижается ~2×. */
+function byteSize(s: string): number {
+  try {
+    return new Blob([s]).size
+  } catch {
+    // Фолбэк без Blob: оценка байтов UTF-8 по код-юнитам.
+    return new TextEncoder().encode(s).length
+  }
+}
+
 export function storageUsage(): { keys: number; bytes: number; items: { key: string; bytes: number }[] } {
-  const items = dataKeys().map((k) => ({ key: k, bytes: (localStorage.getItem(k) || '').length }))
-  const snapBytes = (localStorage.getItem(SNAPSHOTS_KEY) || '').length
-  items.push({ key: SNAPSHOTS_KEY, bytes: snapBytes })
+  const items = dataKeys().map((k) => ({ key: k, bytes: byteSize(localStorage.getItem(k) || '') }))
+  items.push({ key: SNAPSHOTS_KEY, bytes: byteSize(localStorage.getItem(SNAPSHOTS_KEY) || '') })
   const bytes = items.reduce((s, it) => s + it.bytes, 0)
   return { keys: items.length, bytes, items: items.sort((a, b) => b.bytes - a.bytes) }
 }
