@@ -3,6 +3,7 @@ import { YEARS } from '../lib/taxcore'
 import { NUM_FIELDS, type NumField, hasOverride, resetYear, setOverride } from '../state/paramsStore'
 import { useOrg } from '../state/orgStore'
 import { getDadataToken, setDadataToken } from '../lib/innLookup'
+import { getAutomationSettings, setAutomationFlag, type AutomationSettings } from '../lib/automation/settings'
 import { Card, Field, Note, inputClass } from '../components/ui'
 
 const YEARS_LIST = [2024, 2025, 2026]
@@ -65,6 +66,13 @@ export function Settings() {
   const [saved, setSaved] = useState(false)
   const [token, setToken] = useState(getDadataToken())
   const [tokenSaved, setTokenSaved] = useState(false)
+  const [auto, setAuto] = useState(getAutomationSettings())
+
+  const toggleAuto = (k: keyof AutomationSettings) => {
+    const v = !auto[k]
+    setAutomationFlag(k, v)
+    setAuto({ ...auto, [k]: v })
+  }
 
   useEffect(() => {
     const d: Record<string, string> = {}
@@ -222,6 +230,46 @@ export function Settings() {
               Wildberries). С ключом — для любого ИНН из ЕГРЮЛ/ЕГРИП. Ключ хранится только в этом
               браузере.
             </p>
+          </div>
+        </Card>
+
+        <Card title="Автоматизация (бета)">
+          <p className="mb-3 text-sm text-muted">
+            Полуавтоматический режим: система <strong>подсказывает</strong> заполнение и находит
+            возможные ошибки, но решение всегда за вами — ничего не делается автоматически. По
+            умолчанию выключено; включайте по мере доверия и проверяйте, как работает.
+          </p>
+          <div className="space-y-3">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600"
+                checked={auto.autofill}
+                onChange={() => toggleAuto('autofill')}
+              />
+              <span>
+                <span className="text-sm font-medium text-ink">Подсказки заполнения операций</span>
+                <span className="block text-xs text-muted">
+                  В «Деньгах» при вводе контрагента предлагает «учитывать в налоге», описание и тип
+                  операции по прошлым записям — кнопкой «Применить».
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600"
+                checked={auto.insights}
+                onChange={() => toggleAuto('insights')}
+              />
+              <span>
+                <span className="text-sm font-medium text-ink">Инсайты и проверки</span>
+                <span className="block text-xs text-muted">
+                  В «Деньгах» показывает возможные дубли операций, расходы без документов,
+                  дебиторку, падение выручки и прогноз дохода за год.
+                </span>
+              </span>
+            </label>
           </div>
         </Card>
       </div>

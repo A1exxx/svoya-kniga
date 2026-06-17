@@ -9,6 +9,9 @@ import { PrintModal } from '../components/PrintModal'
 import { KudirDoc } from '../components/KudirDoc'
 import { parse1CClientBankExchange, readBankStatement } from '../lib/bankImport'
 import { downloadCsv } from '../lib/download'
+import { getAutomationSettings } from '../lib/automation/settings'
+import { suggestForCounterparty } from '../lib/automation/categorize'
+import { computeInsights } from '../lib/automation/insights'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -67,6 +70,20 @@ export function Money() {
       .filter((row) => Number(row[1]) !== 0 || Number(row[2]) !== 0)
     rows.push(['Итого', pnlInc, pnlExp, pnlProfit])
     downloadCsv(`PnL_${activeOrg.year}.csv`, ['Месяц', 'Доход', 'Расход', 'Прибыль'], rows)
+  }
+
+  // Автоматизация (полуавтомат, по умолчанию выключена — тумблеры в «Настройках»).
+  const auto = getAutomationSettings()
+  const suggestion = auto.autofill ? suggestForCounterparty(ops, draft.counterparty) : null
+  const insights = auto.insights ? computeInsights(yearOps, docs, activeOrg) : []
+  const applySuggestion = () => {
+    if (!suggestion) return
+    setDraft((d) => ({
+      ...d,
+      taxable: suggestion.taxable,
+      note: suggestion.note ?? d.note,
+      kind: suggestion.kind ?? d.kind,
+    }))
   }
 
   const add = () => {
@@ -204,6 +221,27 @@ export function Money() {
         <div className="mb-5">
           <Note tone={importMsg.startsWith('Загружено') ? 'info' : 'warn'}>{importMsg}</Note>
         </div>
+      )}
+
+      {/* Инсайты (H2) — показываются только при включённом тумблере в «Настройках». */}
+      {insights.length > 0 && (
+        <Card title="Инсайты" className="mb-5">
+          <ul className="space-y-2">
+            {insights.map((ins) => (
+              <li key={ins.id} className="flex items-start gap-2 text-sm">
+                <span
+                  className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
+                    ins.level === 'warn' ? 'bg-amber-500' : 'bg-brand-500'
+                  }`}
+                />
+                <span>
+                  <span className="font-medium text-ink">{ins.title}.</span>{' '}
+                  <span className="text-muted">{ins.detail}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       {/* Сводка */}
@@ -364,6 +402,24 @@ export function Money() {
             Добавить
           </button>
         </div>
+        {/* Подсказка заполнения (H1) — только при включённом тумблере; решает человек. */}
+        {suggestion && (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-sm">
+            <span className="text-brand-700">
+              Подсказка {suggestion.basis}:{' '}
+              {suggestion.kind ? (suggestion.kind === 'income' ? 'приход, ' : 'расход, ') : ''}
+              {suggestion.taxable ? 'учитывать в налоге' : 'не в налоге'}
+              {suggestion.note ? `, «${suggestion.note}»` : ''}
+            </span>
+            <button
+              type="button"
+              onClick={applySuggestion}
+              className="cursor-pointer rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-brand-700"
+            >
+              Применить
+            </button>
+          </div>
+        )}
       </Card>
 
       {/* Список операций */}
