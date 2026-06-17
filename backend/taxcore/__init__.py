@@ -14,6 +14,7 @@ from .vznosy import ContributionsResult, calc_contributions
 from .usn import PeriodData, PeriodResult, UsnYearResult, calc_usn, usn_quick
 from .ens import CalendarEvent, usn_calendar
 from .vat import VatResult, calc_vat_usn
+from .patent import PatentResult, calc_patent
 from .payroll import (
     PAYROLL,
     AlimonyResult,
@@ -44,6 +45,8 @@ __all__ = [
     "CalendarEvent", "usn_calendar",
     # vat
     "VatResult", "calc_vat_usn",
+    # patent
+    "PatentResult", "calc_patent",
     # payroll
     "PayrollParams", "PAYROLL", "get_payroll", "ndfl_progressive", "child_deduction_monthly",
     "SalaryMonth", "SalaryResult", "calc_salary",

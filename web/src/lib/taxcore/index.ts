@@ -11,3 +11,4 @@ export * from './usn.js';
 export * from './ens.js';
 export * from './payroll.js';
 export * from './vat.js';
+export * from './patent.js';
