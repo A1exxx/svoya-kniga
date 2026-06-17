@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOrg, type Org } from '../state/orgStore'
 import { useEmployees, type Employee } from '../state/employeesStore'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation } from '../lib/taxcore'
@@ -94,6 +94,11 @@ function StaffRoster({ year }: { year: number }) {
   const { employees, addEmployee, updateEmployee, removeEmployee } = useEmployees()
   const [selectedId, setSelectedId] = useState<string | null>(employees[0]?.id ?? null)
   const [docType, setDocType] = useState<EmployeeDocType | null>(null)
+  // При переключении ИП сбрасываем выбор на первого сотрудника нового штата.
+  useEffect(() => {
+    setSelectedId(employees[0]?.id ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrg.id])
   const selected = employees.find((e) => e.id === selectedId) ?? null
   const create = () => setSelectedId(addEmployee())
   const up = (patch: Partial<Employee>) => selected && updateEmployee(selected.id, patch)

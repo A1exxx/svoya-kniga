@@ -3,6 +3,7 @@ import { useOrg, type Org } from './orgStore'
 import { calcVatUsn, getParams } from '../lib/taxcore'
 
 export interface DocItem {
+  id: string
   name: string
   qty: number
   price: number
@@ -89,12 +90,31 @@ function makeId(): string {
   }
 }
 
+let itemCounter = 0
+/** Стабильный id строки документа (нужен для корректного React-key при удалении). */
+export function makeItemId(): string {
+  try {
+    return crypto.randomUUID()
+  } catch {
+    return 'it-' + (itemCounter++).toString(36) + Math.floor(performance.now()).toString(36)
+  }
+}
+
+/** Новая строка документа со стабильным id. */
+export function newDocItem(name = '', qty = 1, price = 0): DocItem {
+  return { id: makeItemId(), name, qty, price }
+}
+
 function load(): Store {
   try {
     const raw = (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
-    // Миграция: старые документы без направления считаем исходящими.
+    // Миграция: старые документы без направления → исходящие; строки без id получают id.
     for (const k of Object.keys(raw)) {
-      raw[k] = (raw[k] ?? []).map((d) => ({ ...d, direction: d.direction ?? 'outgoing' }))
+      raw[k] = (raw[k] ?? []).map((d) => ({
+        ...d,
+        direction: d.direction ?? 'outgoing',
+        items: (d.items ?? []).map((it) => ({ ...it, id: it.id ?? makeItemId() })),
+      }))
     }
     return raw
   } catch {
@@ -139,7 +159,7 @@ export function DocsProvider({ children }: { children: ReactNode }) {
       date: new Date().toISOString().slice(0, 10),
       buyer: '',
       buyerDetails: '',
-      items: [{ name: '', qty: 1, price: 0 }],
+      items: [newDocItem()],
       // Для входящих ставку НДС вводит поставщик (по умолчанию без НДС); для исходящих — из реквизитов.
       vatMode: direction === 'incoming' ? 'none' : defaultDocVatMode(activeOrg),
       note: '',

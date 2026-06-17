@@ -46,9 +46,29 @@ function makeId(): string {
   }
 }
 
+const EMP_DEFAULTS: Omit<Employee, 'id'> = {
+  fio: '',
+  position: '',
+  salary: 0,
+  children: 0,
+  stazhYears: 0,
+  stazhMode: 'auto',
+  stazhPriorMonths: 0,
+  hireDate: '',
+  advanceDay: 25,
+  advancePercent: 0,
+  earningsByYear: {},
+  msp: true,
+}
+
 function load(): Store {
   try {
-    return (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
+    const raw = (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
+    // Бэкфилл дефолтов для записей из старой схемы (children, stazhMode, advance* и т.п.).
+    for (const k of Object.keys(raw)) {
+      raw[k] = (raw[k] ?? []).map((e) => ({ ...EMP_DEFAULTS, ...e }))
+    }
+    return raw
   } catch {
     return {}
   }

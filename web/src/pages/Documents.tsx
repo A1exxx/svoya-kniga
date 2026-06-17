@@ -4,6 +4,7 @@ import {
   DOC_TYPE_LABEL,
   CONTRACT_KIND_LABEL,
   docTotals,
+  newDocItem,
   useDocs,
   type DocItem,
   type DocType,
@@ -90,7 +91,7 @@ export function Documents() {
     const items = selected.items.map((it, i) => (i === idx ? { ...it, ...patch } : it))
     updateDoc(selected.id, { items })
   }
-  const addItem = () => selected && updateDoc(selected.id, { items: [...selected.items, { name: '', qty: 1, price: 0 }] })
+  const addItem = () => selected && updateDoc(selected.id, { items: [...selected.items, newDocItem()] })
   const removeItem = (idx: number) =>
     selected && updateDoc(selected.id, { items: selected.items.filter((_, i) => i !== idx) })
 
@@ -102,7 +103,7 @@ export function Documents() {
   const addFromGood = (id: string) => {
     const g = goods.find((x) => x.id === id)
     if (!selected || !g) return
-    updateDoc(selected.id, { items: [...selected.items, { name: g.name, qty: 1, price: g.price }] })
+    updateDoc(selected.id, { items: [...selected.items, newDocItem(g.name, 1, g.price)] })
   }
 
   // Смена статуса оплаты: «Оплачен» → создаёт поступление в «Деньгах»; снятие — удаляет его.
@@ -406,7 +407,7 @@ export function Documents() {
                 <div className="mb-2 text-sm font-medium text-ink">Позиции</div>
                 <div className="space-y-2">
                   {selected.items.map((it, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_70px_110px_36px] gap-2">
+                    <div key={it.id} className="grid grid-cols-[1fr_70px_110px_36px] gap-2">
                       <input className={inputClass} placeholder="Наименование" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.qty} onChange={(e) => setItem(i, { qty: Math.max(0, Number(e.target.value) || 0) })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.price} onChange={(e) => setItem(i, { price: Math.max(0, Number(e.target.value) || 0) })} />

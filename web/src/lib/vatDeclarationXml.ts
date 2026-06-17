@@ -41,7 +41,7 @@ export function vatDeclarationXml(org: Org, vat: VatResult, periodCode = '24'): 
     '<?xml version="1.0" encoding="windows-1251"?>',
     `<Файл ИдФайл="${esc(vatDeclarationFileName(org).replace(/\.xml$/, ''))}" ВерсПрог="СвояКнига" ВерсФорм="5.08">`,
     '  <Документ КНД="1151001" ДатаДок="' + nowYmd() + '" Период="' + periodCode + '" ОтчетГод="' + org.year + '">',
-    `    <СвНП><НПЮЛ ИННЮЛ="${esc(inn)}"/></СвНП>`,
+    `    <СвНП><НПИП ИННФЛ="${esc(inn)}"/></СвНП>`,
     '    <НДС>',
     `      <Раздел1 ОКТМО="${esc(oktmo)}" КБК="18210301000011000110" НалПУ="${toPay}"/>`,
     `      <Раздел3 НалБаза="${base}" Ставка="${rate}" СумНал="${toPay}" ` +
