@@ -32,9 +32,12 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
   const adv = computed.calendar
     .filter((e) => e.kind === 'notification' && e.title.includes('аванс'))
     .map((e, i) => ({ period: ['34/01', '34/02', '34/03'][i] ?? '34', amount: e.amount }))
+  // Уведомление формируется ТОЛЬКО по квартальным авансам. Годовой налог уведомлением не подаётся
+  // (его заменяет декларация), поэтому при отсутствии поквартальных сумм обязательств нет —
+  // не подставляем годовой налог под ошибочный код 34/03.
   const annualOnly = adv.length === 0 || adv.every((a) => a.amount == null)
   const obligations: Ob[] = annualOnly
-    ? [{ period: '34/03', sum: rub(computed.usn.tax_year_final) }]
+    ? []
     : adv.map((a) => ({ period: a.period, sum: rub(a.amount) }))
 
   const oktmo = org.oktmo || '00000000'

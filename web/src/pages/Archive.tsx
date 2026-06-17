@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
 import { useArchive, type ArchiveRecord } from '../state/archiveStore'
 import { compute } from '../lib/compute'
+import { buildVatBooks } from '../lib/vatBooks'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Note } from '../components/ui'
 import { PrintModal } from '../components/PrintModal'
@@ -23,23 +24,39 @@ export function Archive() {
   const { records, removeArchive } = useArchive()
   const [open, setOpen] = useState<ArchiveRecord | null>(null)
 
-  let computed: ReturnType<typeof compute> | null = null
-  try {
-    computed = compute(activeOrg, ops)
-  } catch {
-    computed = null
-  }
-
   const renderDoc = (rec: ArchiveRecord) => {
-    if (!computed) return <Note>Не удалось пересобрать документ — проверьте расчёт.</Note>
-    if (rec.docKind === 'declaration') return <DeclarationDoc org={activeOrg} computed={computed} />
-    if (rec.docKind === 'ens') return <EnsNotificationDoc org={activeOrg} computed={computed} />
-    if (rec.docKind === 'vat' && computed.vat) return <VatDeclarationDoc org={activeOrg} vat={computed.vat} />
+    // Пересчёт ИЗ СНИМКА на момент сдачи (входы заморожены) — цифры совпадут с поданной формой.
+    // Старые записи без снимка — фолбэк на текущие данные (как было).
+    const snap = rec.snapshot
+    const org = snap?.org ?? activeOrg
+    let c: ReturnType<typeof compute> | null = null
+    try {
+      c = compute(org, snap?.ops ?? ops)
+    } catch {
+      c = null
+    }
+    if (!c) return <Note>Не удалось пересобрать документ — проверьте расчёт.</Note>
+    let doc: ReactNode
+    if (rec.docKind === 'declaration') doc = <DeclarationDoc org={org} computed={c} />
+    else if (rec.docKind === 'ens') doc = <EnsNotificationDoc org={org} computed={c} />
+    else if (rec.docKind === 'vat' && c.vat)
+      doc = <VatDeclarationDoc org={org} vat={c.vat} books={buildVatBooks(snap?.docs ?? [], org.year)} />
+    else
+      return (
+        <Note>
+          Повторная печать этой формы доступна в соответствующем разделе. Здесь хранится факт сдачи:{' '}
+          {rec.title} ({rec.period}), сдано {formatDate(rec.submittedAt)}.
+        </Note>
+      )
     return (
-      <Note>
-        Повторная печать этой формы доступна в соответствующем разделе. Здесь хранится факт сдачи:{' '}
-        {rec.title} ({rec.period}), сдано {formatDate(rec.submittedAt)}.
-      </Note>
+      <div>
+        {snap && (
+          <p className="mb-3 text-xs text-muted">
+            Данные на момент сдачи ({formatDate(rec.submittedAt)}) — не меняются при последующих правках.
+          </p>
+        )}
+        {doc}
+      </div>
     )
   }
 

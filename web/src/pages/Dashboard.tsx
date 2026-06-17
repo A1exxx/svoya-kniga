@@ -4,6 +4,7 @@ import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
+import { useDocs } from '../state/docsStore'
 import { useArchive, archiveDocKindFromTitle } from '../state/archiveStore'
 import { Card } from '../components/ui'
 import { IconCheck, IconChevron, IconClock, IconSend } from '../components/icons'
@@ -22,6 +23,7 @@ function startOfTodayMs(): number {
 export function Dashboard() {
   const { activeOrg } = useOrg()
   const { ops } = useOps()
+  const { docs } = useDocs()
   const { archivedKeys, addArchive } = useArchive()
   const o = activeOrg
   const [wizard, setWizard] = useState<TaskEvent | null>(null)
@@ -58,6 +60,8 @@ export function Dashboard() {
       dueDate: e.due,
       submittedAt: new Date().toISOString().slice(0, 10),
       amount: e.amount != null ? e.amount.toNumber() : null,
+      // Снимок входных данных на момент сдачи — чтобы повторная печать показывала поданные цифры.
+      snapshot: { org: o, ops, docs },
     })
 
   const TaskRow = ({ e, locked }: { e: Ev; locked?: boolean }) => {

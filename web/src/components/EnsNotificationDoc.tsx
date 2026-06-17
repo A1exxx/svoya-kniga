@@ -29,19 +29,11 @@ export function EnsNotificationDoc({ org, computed }: { org: Org; computed: Comp
       amount: e.amount,
     }))
 
-  // При годовом (упрощённом) расчёте поквартальных сумм нет — показываем годовой ориентир.
+  // Уведомление подаётся ТОЛЬКО по квартальным авансам (34/01, 34/02, 34/03). Если поквартальных
+  // сумм нет (упрощённый годовой расчёт) — НЕ подставляем годовой налог под код 34/03: годовой
+  // налог уведомлением не подаётся вовсе, его заменяет декларация. Показываем пустую форму + пояснение.
   const annualOnly = advRows.length === 0 || advRows.every((r) => r.amount == null)
-  const rows: ObRow[] = annualOnly
-    ? [
-        {
-          kbk,
-          oktmo: org.oktmo || '00000000',
-          period: '34/03',
-          title: 'Аванс по УСН (по итогам расчёта)',
-          amount: computed.usn.tax_year_final,
-        },
-      ]
-    : advRows
+  const rows: ObRow[] = annualOnly ? [] : advRows
 
   return (
     <div>
@@ -83,16 +75,26 @@ export function EnsNotificationDoc({ org, computed }: { org: Org; computed: Comp
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b border-slate-200 align-top">
-              <td className="py-1.5 pr-2">—</td>
-              <td className="tnum py-1.5 pr-2">{r.oktmo}</td>
-              <td className="tnum py-1.5 pr-2">{r.kbk}</td>
-              <td className="tnum py-1.5 pr-2">{r.period}</td>
-              <td className="py-1.5 pr-2">{r.title}</td>
-              <td className="tnum py-1.5 text-right font-medium">{v(r.amount)}</td>
+          {rows.length === 0 ? (
+            <tr className="border-b border-slate-200">
+              <td colSpan={6} className="py-3 text-[12.5px] text-slate-500">
+                Поквартальные авансы не рассчитаны — уведомление по ним не формируется. Внесите доходы
+                по датам в «Деньгах», чтобы получить суммы авансов за 1 кв / полугодие / 9 месяцев.
+                Годовой налог подаётся декларацией, а не уведомлением.
+              </td>
             </tr>
-          ))}
+          ) : (
+            rows.map((r, i) => (
+              <tr key={i} className="border-b border-slate-200 align-top">
+                <td className="py-1.5 pr-2">—</td>
+                <td className="tnum py-1.5 pr-2">{r.oktmo}</td>
+                <td className="tnum py-1.5 pr-2">{r.kbk}</td>
+                <td className="tnum py-1.5 pr-2">{r.period}</td>
+                <td className="py-1.5 pr-2">{r.title}</td>
+                <td className="tnum py-1.5 text-right font-medium">{v(r.amount)}</td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
 

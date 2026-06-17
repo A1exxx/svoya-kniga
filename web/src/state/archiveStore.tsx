@@ -1,9 +1,22 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { useOrg } from './orgStore'
+import { useOrg, type Org } from './orgStore'
+import type { Operation } from './opsStore'
+import type { Doc } from './docsStore'
 import { persistKey } from '../lib/storage/idb'
 
 /** Что можно повторно открыть/распечатать из архива. */
 export type ArchiveDocKind = 'declaration' | 'ens' | 'vat' | 'payroll' | null
+
+/**
+ * Снимок ВХОДНЫХ данных на момент сдачи. Храним входы (org/ops/docs), а не результат расчёта:
+ * пересчёт из них детерминирован и не зависит от Decimal-сериализации. Это гарантирует, что
+ * повторно открытая форма покажет ровно те цифры, что были поданы (а не текущие).
+ */
+export interface ArchiveSnapshot {
+  org: Org
+  ops: Operation[]
+  docs: Doc[]
+}
 
 /** Запись в архиве сданного — задача, отмеченная «Сдано». */
 export interface ArchiveRecord {
@@ -16,6 +29,10 @@ export interface ArchiveRecord {
   dueDate: string // YYYY-MM-DD
   submittedAt: string // YYYY-MM-DD
   amount: number | null
+  /** Снимок входных данных на момент сдачи (для верной повторной печати). Опц. — старые записи без него. */
+  snapshot?: ArchiveSnapshot
+  /** Построчное уведомление (КНД 1110355) из «Полезных документов» — для повторной печати. */
+  notificationRow?: { kbk: string; oktmo: string; period: string; year: number; amount: number; title: string }
 }
 
 const KEY = 'svoyakniga.archive.v1'
