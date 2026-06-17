@@ -99,3 +99,9 @@ interface YearParams {
 Это позволяет, например, задать региональную ставку УСН 1% вместо 6%, не трогая код.
 
 Приоритет: `paramsStore overrides > YEARS[year]` — при каждом расчёте сначала берётся `getParams(year)`, затем мержатся данные из стора.
+
+> **Ограничение:** через UI (`/settings`) редактируются только поля из `NUM_FIELDS` в `paramsStore.ts`:
+> `fixed_contributions`, `income_threshold_1pct`, `rate_1pct`, `max_variable_contributions`,
+> `usn_income_rate`, `usn_income_minus_rate`, `usn_min_tax_rate`.
+>
+> НДС-поля (`vat_exempt_threshold`, `vat_rate5_limit`, `vat_rate7_limit`, `vat_general_rate`) **не входят в `NUM_FIELDS`** и через экран настроек не редактируются — их можно изменить только напрямую в `params.ts` (и синхронно в `params.py`).

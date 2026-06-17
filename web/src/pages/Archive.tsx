@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
+import { useEmployees } from '../state/employeesStore'
 import { useArchive, type ArchiveRecord } from '../state/archiveStore'
 import { compute } from '../lib/compute'
 import { buildVatBooks } from '../lib/vatBooks'
@@ -10,6 +11,8 @@ import { PrintModal } from '../components/PrintModal'
 import { DeclarationDoc } from '../components/DeclarationDoc'
 import { EnsNotificationDoc } from '../components/EnsNotificationDoc'
 import { VatDeclarationDoc } from '../components/VatDeclarationDoc'
+import { NotificationDoc } from '../components/NotificationDoc'
+import { PayrollStatementDoc } from '../components/PayrollStatementDoc'
 
 const KIND_LABEL = {
   payment: 'Платёж',
@@ -21,6 +24,7 @@ const KIND_LABEL = {
 export function Archive() {
   const { activeOrg } = useOrg()
   const { ops } = useOps()
+  const { employees } = useEmployees()
   const { records, removeArchive } = useArchive()
   const [open, setOpen] = useState<ArchiveRecord | null>(null)
 
@@ -29,25 +33,34 @@ export function Archive() {
     // Старые записи без снимка — фолбэк на текущие данные (как было).
     const snap = rec.snapshot
     const org = snap?.org ?? activeOrg
-    let c: ReturnType<typeof compute> | null = null
-    try {
-      c = compute(org, snap?.ops ?? ops)
-    } catch {
-      c = null
-    }
-    if (!c) return <Note>Не удалось пересобрать документ — проверьте расчёт.</Note>
+    const emps = snap?.employees ?? employees
     let doc: ReactNode
-    if (rec.docKind === 'declaration') doc = <DeclarationDoc org={org} computed={c} />
-    else if (rec.docKind === 'ens') doc = <EnsNotificationDoc org={org} computed={c} />
-    else if (rec.docKind === 'vat' && c.vat)
-      doc = <VatDeclarationDoc org={org} vat={c.vat} books={buildVatBooks(snap?.docs ?? [], org.year)} />
-    else
-      return (
-        <Note>
-          Повторная печать этой формы доступна в соответствующем разделе. Здесь хранится факт сдачи:{' '}
-          {rec.title} ({rec.period}), сдано {formatDate(rec.submittedAt)}.
-        </Note>
-      )
+    // Уведомление КНД 1110355 из «Полезных документов» — рисуем из сохранённой строки.
+    if (rec.notificationRow) {
+      doc = <NotificationDoc org={org} rows={[rec.notificationRow]} />
+    } else if (rec.docKind === 'payroll') {
+      // Зарплатная задача — ведомость с «начислено / НДФЛ / на руки» по штату на момент сдачи.
+      doc = <PayrollStatementDoc org={org} employees={emps} />
+    } else {
+      let c: ReturnType<typeof compute> | null = null
+      try {
+        c = compute(org, snap?.ops ?? ops)
+      } catch {
+        c = null
+      }
+      if (!c) return <Note>Не удалось пересобрать документ — проверьте расчёт.</Note>
+      if (rec.docKind === 'declaration') doc = <DeclarationDoc org={org} computed={c} />
+      else if (rec.docKind === 'ens') doc = <EnsNotificationDoc org={org} computed={c} />
+      else if (rec.docKind === 'vat' && c.vat)
+        doc = <VatDeclarationDoc org={org} vat={c.vat} books={buildVatBooks(snap?.docs ?? [], org.year)} />
+      else
+        return (
+          <Note>
+            Повторная печать этой формы доступна в соответствующем разделе. Здесь хранится факт сдачи:{' '}
+            {rec.title} ({rec.period}), сдано {formatDate(rec.submittedAt)}.
+          </Note>
+        )
+    }
     return (
       <div>
         {snap && (

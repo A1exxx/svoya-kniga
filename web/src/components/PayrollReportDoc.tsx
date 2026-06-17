@@ -1,4 +1,4 @@
-import { calcSalary } from '../lib/taxcore'
+import { payrollSummary } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { Employee } from '../state/employeesStore'
@@ -13,51 +13,6 @@ export const REPORT_TITLE: Record<ReportType, string> = {
 }
 
 const r2 = (n: number) => formatRub(Math.round(n))
-
-interface Agg {
-  e: Employee
-  grossYear: number
-  ndflYear: number
-  vznosyYear: number
-  travmYear: number
-  grossMonth: number
-  ndflMonth: number
-}
-
-function aggregate(org: Org, employees: Employee[]): { rows: Agg[]; totals: Omit<Agg, 'e'> } {
-  const rows: Agg[] = employees.map((e) => {
-    let grossYear = 0,
-      ndflYear = 0,
-      vznosyYear = 0,
-      travmYear = 0,
-      grossMonth = 0,
-      ndflMonth = 0
-    try {
-      const c = calcSalary(org.year, e.salary, { children: e.children, msp: e.msp })
-      grossYear = c.gross_year.toNumber()
-      ndflYear = c.ndfl_year.toNumber()
-      vznosyYear = c.vznosy_year.toNumber()
-      travmYear = c.travmatizm_year.toNumber()
-      grossMonth = c.months[0]?.gross.toNumber() ?? 0
-      ndflMonth = c.months[0]?.ndfl.toNumber() ?? 0
-    } catch {
-      /* пропускаем сотрудника с некорректными данными */
-    }
-    return { e, grossYear, ndflYear, vznosyYear, travmYear, grossMonth, ndflMonth }
-  })
-  const sum = (f: (a: Agg) => number) => rows.reduce((s, a) => s + f(a), 0)
-  return {
-    rows,
-    totals: {
-      grossYear: sum((a) => a.grossYear),
-      ndflYear: sum((a) => a.ndflYear),
-      vznosyYear: sum((a) => a.vznosyYear),
-      travmYear: sum((a) => a.travmYear),
-      grossMonth: sum((a) => a.grossMonth),
-      ndflMonth: sum((a) => a.ndflMonth),
-    },
-  }
-}
 
 function Head({ org, title, knd }: { org: Org; title: string; knd?: string }) {
   return (
@@ -92,8 +47,9 @@ export function PayrollReportDoc({
   employees: Employee[]
   type: ReportType
 }) {
-  const { rows, totals } = aggregate(org, employees)
-  const n = employees.length
+  // Единый источник агрегации (тот же, что «Сводка по штату» и ведомость) — без дублирования.
+  const { rows, totals, count } = payrollSummary(org, employees)
+  const n = count
 
   if (type === '6ndfl') {
     return (

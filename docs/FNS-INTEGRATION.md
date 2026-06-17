@@ -81,11 +81,13 @@ interface FnsGateway {
 
 ## Как переключить реализацию
 
-При появлении реальных gateway-реализаций переключение происходит в одном месте — провайдер контекста `FnsProvider`:
+При появлении реальных gateway-реализаций переключение происходит в одном месте — функция `activeGateway()`:
 
-```tsx
-// web/src/providers/FnsProvider.tsx
-const gateway = new ManualImitationGateway()   // ← заменить на LkFnsGateway или OperatorApiGateway
+```ts
+// web/src/lib/fns/gateway.ts
+export function activeGateway(): FnsGateway {
+  return new ManualImitationGateway()   // ← заменить на LkFnsGateway или OperatorApiGateway
+}
 ```
 
-Все экраны (`TaxOffice`, `Reports`, `Taxes`, `UsefulDocs`) получают gateway через контекст и не знают о реализации.
+Экраны (`TaxOffice` и др.) импортируют `activeGateway` напрямую и вызывают её при инициализации — контекст React не используется. `FnsProvider.tsx` не существует.

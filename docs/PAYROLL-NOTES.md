@@ -16,8 +16,8 @@
 - При расчёте аванса вычеты не учитываются → сумма аванса чуть больше реальной половины месячного НДФЛ.
 - При расчёте итогового НДФЛ вычеты применяются к полному доходу за месяц → settlement_ndfl может быть меньше advance_ndfl.
 
-Логика: `payroll.ts` → `splitNdflByPeriods(gross, advanceFraction, yearToDate, params)`.
-Уведомления: `notifications.ts` → `buildNotifications(year, month, employees, payrollResults)`.
+Логика: `payroll.ts` → `calcSalary(year, gross, opts)` — возвращает `advance_ndfl` и `settlement_ndfl` как поля результата.
+Уведомления: `notifications.ts` → `ndflPeriodEntries(salaryResult)` + `ndflEntriesTotal(entries)`.
 
 ---
 
@@ -32,9 +32,11 @@
 Модуль: `web/src/lib/stazh.ts`
 
 ```
-calcStazh(hireDate: string, asOf: string): number   // полных лет
-sickCoeff(stazhYears: number): 0.6 | 0.8 | 1.0
+computeStazh(hireDate: string, asOf?: string, priorMonths?: number): Stazh | null   // объект с годами/месяцами/днями
+stazhYearsFromHire(hireDate: string, asOf?: string): number   // полных лет (для коэффициента больничных)
 ```
+
+Коэффициент больничных (60% / 80% / 100%) применяется **inline** в `calcSickLeave` (`payroll.ts`) на основе параметра `stazhYears` — отдельной экспортируемой функции нет.
 
 Экран «Карточка сотрудника» показывает «Стаж: X лет (авто)» или «X лет (ручной)» в зависимости от того, что заполнено.
 
@@ -57,10 +59,11 @@ sickCoeff(stazhYears: number): 0.6 | 0.8 | 1.0
 Модуль: `web/src/lib/earnings.ts`
 
 ```
-getEarningsBase(employee, years: number[]): Decimal   // сумма за указанные годы
-calcVacationDailyAverage(employee, year): Decimal     // ÷ 12 ÷ 29,3
-calcSickDailyAverage(employee, year): Decimal         // ÷ 730, с лимитами
+sickBases(earnings, year): { e1: number; e2: number }   // заработок за два предшествующих года (year-1, year-2)
+vacationBase12m(earnings, asOfYear): number              // сумма за последние 12 месяцев → ÷ 12 ÷ 29,3 в calcVacation
 ```
+
+Среднедневной для больничных и отпускных вычисляется в `calcSickLeave` / `calcVacation` (`payroll.ts`) — отдельных `calcSickDailyAverage` / `calcVacationDailyAverage` нет.
 
 **Ограничение для больничных:**
 - Минимум: `МРОТ × 24 ÷ 730` (защита от нуля)

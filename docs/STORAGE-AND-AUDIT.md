@@ -14,7 +14,7 @@
 | `svoyakniga.employees.<orgId>` | `employeesStore` | Сотрудники |
 | `svoyakniga.archive.<orgId>` | `archiveStore` | Архив задач и событий |
 | `svoyakniga.taxoffice.<orgId>` | `taxOfficeStore` | Данные раздела «Налоговая» |
-| `svoyakniga.params.<orgId>` | `paramsStore` | Пользовательские переопределения YearParams |
+| `svoyakniga.paramOverrides.v1` | `paramsStore` | Пользовательские переопределения YearParams (глобальный ключ, не скоупирован по orgId) |
 
 Служебные ключи (не содержат бизнес-данных):
 

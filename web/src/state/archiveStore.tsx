@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { useOrg, type Org } from './orgStore'
 import type { Operation } from './opsStore'
 import type { Doc } from './docsStore'
+import type { Employee } from './employeesStore'
 import { persistKey } from '../lib/storage/idb'
 
 /** Что можно повторно открыть/распечатать из архива. */
@@ -16,6 +17,7 @@ export interface ArchiveSnapshot {
   org: Org
   ops: Operation[]
   docs: Doc[]
+  employees: Employee[]
 }
 
 /** Запись в архиве сданного — задача, отмеченная «Сдано». */

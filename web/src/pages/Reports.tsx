@@ -1,17 +1,21 @@
 import { useState, type ReactNode } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
+import { useDocs } from '../state/docsStore'
 import { useEmployees } from '../state/employeesStore'
 import { compute } from '../lib/compute'
+import { buildVatBooks } from '../lib/vatBooks'
 import { Card, Note } from '../components/ui'
 import { PrintModal } from '../components/PrintModal'
 import { SendDemoModal } from '../components/SendDemoModal'
 import { DeclarationDoc } from '../components/DeclarationDoc'
 import { EnsNotificationDoc } from '../components/EnsNotificationDoc'
+import { VatDeclarationDoc } from '../components/VatDeclarationDoc'
 import { KudirDoc } from '../components/KudirDoc'
 import { PayrollReportDoc, REPORT_TITLE, type ReportType } from '../components/PayrollReportDoc'
 import { declarationUsnXml, declarationFileName } from '../lib/declarationXml'
 import { ensNotificationXml, ensFileName } from '../lib/ensXml'
+import { vatDeclarationXml, vatDeclarationFileName } from '../lib/vatDeclarationXml'
 import { downloadText } from '../lib/download'
 
 interface Report {
@@ -40,6 +44,7 @@ const PAYROLL_META: Record<ReportType, { knd?: string; period: string; authority
 export function Reports() {
   const { activeOrg: o } = useOrg()
   const { ops } = useOps()
+  const { docs } = useDocs()
   const { employees } = useEmployees()
   const [viewId, setViewId] = useState<string | null>(null)
   const [sendName, setSendName] = useState<string | null>(null)
@@ -75,6 +80,31 @@ export function Reports() {
             downloadText(ensFileName(o), ensNotificationXml(o, computed!), 'application/xml;charset=utf-8'),
           sendable: true,
         },
+        ...(o.vat && computed.vat
+          ? [
+              {
+                id: 'vat-decl',
+                name: 'Декларация по НДС',
+                knd: '1151001',
+                period: 'квартал',
+                authority: 'ФНС',
+                node: (
+                  <VatDeclarationDoc
+                    org={o}
+                    vat={computed.vat}
+                    books={buildVatBooks(docs, o.year)}
+                  />
+                ),
+                xml: () =>
+                  downloadText(
+                    vatDeclarationFileName(o),
+                    vatDeclarationXml(o, computed!.vat!, '24', buildVatBooks(docs, o.year)),
+                    'application/xml;charset=windows-1251'
+                  ),
+                sendable: true,
+              },
+            ]
+          : []),
         {
           id: 'kudir',
           name: 'Книга учёта доходов и расходов (КУДиР)',

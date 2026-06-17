@@ -69,7 +69,7 @@
 | `employeesStore` | `svoyakniga.employees.<orgId>` | Сотрудники: реквизиты, стаж, заработок по годам, дети |
 | `archiveStore` | `svoyakniga.archive.<orgId>` | Архив закрытых задач/событий |
 | `taxOfficeStore` | `svoyakniga.taxoffice.<orgId>` | Данные раздела «Налоговая»: сальдо ЕНС, запросы сверки, письма |
-| `paramsStore` | `svoyakniga.params.<orgId>` | Пользовательские переопределения `YearParams` |
+| `paramsStore` | `svoyakniga.paramOverrides.v1` | Пользовательские переопределения `YearParams` (глобальный ключ, не скоупирован по orgId) |
 
 Все данные скоупированы по `orgId` — можно вести несколько ИП в одном браузере.
 
