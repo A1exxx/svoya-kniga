@@ -1,10 +1,45 @@
-import { useOrg } from '../state/orgStore'
+import { useState } from 'react'
+import { useOrg, type Org } from '../state/orgStore'
 import { type UsnObject } from '../lib/taxcore'
+import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
 import { Card, Field, Note, inputClass } from '../components/ui'
 
 export function Requisites() {
   const { activeOrg, updateActiveOrg } = useOrg()
   const o = activeOrg
+  const [busy, setBusy] = useState(false)
+  const [innMsg, setInnMsg] = useState<string | null>(null)
+
+  const onLookup = async () => {
+    if (!isValidInnLength(o.inn)) {
+      setInnMsg('Введите ИНН: 10 цифр для организации или 12 для ИП.')
+      return
+    }
+    setBusy(true)
+    setInnMsg(null)
+    const info = await lookupInn(o.inn)
+    setBusy(false)
+    if (!info) {
+      setInnMsg(
+        getDadataToken()
+          ? 'По этому ИНН ничего не найдено.'
+          : 'Демо-ИНН не распознан. Чтобы работали любые ИНН — укажите бесплатный ключ DaData в «Настройках».'
+      )
+      return
+    }
+    const patch: Partial<Org> = {
+      address: info.address || o.address,
+      ogrnip: info.ogrn || o.ogrnip,
+    }
+    if (info.type === 'ip') {
+      patch.fio = info.name
+      if (!o.name) patch.name = info.name
+    } else {
+      patch.name = info.name
+    }
+    updateActiveOrg(patch)
+    setInnMsg('Реквизиты заполнены по ИНН ✓')
+  }
 
   const text = (key: keyof typeof o, label: string, placeholder = '', hint?: string) => (
     <Field label={label} hint={hint}>
@@ -27,14 +62,17 @@ export function Requisites() {
             расчётах и документах. Переключить или добавить ИП можно слева внизу.
           </p>
         </div>
-        <button
-          type="button"
-          disabled
-          title="Появится позже"
-          className="cursor-not-allowed rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-400"
-        >
-          Заполнить по ИНН (в разработке)
-        </button>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            type="button"
+            onClick={onLookup}
+            disabled={busy}
+            className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
+          >
+            {busy ? 'Поиск…' : 'Заполнить по ИНН'}
+          </button>
+          {innMsg && <span className="max-w-[280px] text-right text-xs text-muted">{innMsg}</span>}
+        </div>
       </header>
 
       <div className="space-y-5">
@@ -44,7 +82,14 @@ export function Requisites() {
             {text('fio', 'ФИО предпринимателя', 'Иванов Иван Иванович')}
             {text('inn', 'ИНН', '123456789012')}
             {text('ogrnip', 'ОГРНИП', '312345678901234')}
-            {text('regDate', 'Дата регистрации', '', 'в формате ГГГГ-ММ-ДД')}
+            <Field label="Дата регистрации" hint="влияет на расчёт взносов за неполный год">
+              <input
+                type="date"
+                className={inputClass}
+                value={o.regDate || ''}
+                onChange={(e) => updateActiveOrg({ regDate: e.target.value })}
+              />
+            </Field>
             {text('okved', 'Основной ОКВЭД', '62.01')}
             <div className="sm:col-span-2">{text('address', 'Адрес', 'г. Москва, ...')}</div>
           </div>

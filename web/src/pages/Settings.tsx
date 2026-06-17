@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { YEARS } from '../lib/taxcore'
 import { NUM_FIELDS, type NumField, hasOverride, resetYear, setOverride } from '../state/paramsStore'
 import { useOrg } from '../state/orgStore'
+import { getDadataToken, setDadataToken } from '../lib/innLookup'
 import { Card, Field, Note, inputClass } from '../components/ui'
 
 const YEARS_LIST = [2024, 2025, 2026]
@@ -62,6 +63,8 @@ export function Settings() {
   const [year, setYear] = useState(activeOrg.year)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [saved, setSaved] = useState(false)
+  const [token, setToken] = useState(getDadataToken())
+  const [tokenSaved, setTokenSaved] = useState(false)
 
   useEffect(() => {
     const d: Record<string, string> = {}
@@ -184,6 +187,43 @@ export function Settings() {
           )}
           {saved && <span className="text-sm text-ok">Сохранено ✓</span>}
         </div>
+
+        <Card title="Автозаполнение по ИНН (DaData)">
+          <div className="space-y-3">
+            <Field
+              label="API-ключ DaData"
+              hint="бесплатно на dadata.ru → Личный кабинет → API-ключи → «Ключ для сервиса подсказок»"
+            >
+              <input
+                className={inputClass}
+                placeholder="вставьте ключ, чтобы заработали любые ИНН"
+                value={token}
+                onChange={(e) => {
+                  setToken(e.target.value)
+                  setTokenSaved(false)
+                }}
+              />
+            </Field>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDadataToken(token)
+                  setTokenSaved(true)
+                }}
+                className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+              >
+                Сохранить ключ
+              </button>
+              {tokenSaved && <span className="text-sm text-ok">Сохранено ✓</span>}
+            </div>
+            <p className="text-xs text-muted">
+              Без ключа автозаполнение работает для нескольких демо-ИНН (Сбербанк, Яндекс, Ozon,
+              Wildberries). С ключом — для любого ИНН из ЕГРЮЛ/ЕГРИП. Ключ хранится только в этом
+              браузере.
+            </p>
+          </div>
+        </Card>
       </div>
     </div>
   )

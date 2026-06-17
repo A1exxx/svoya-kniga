@@ -6,6 +6,7 @@ import {
   type ContractorType,
 } from '../state/contractorsStore'
 import { Card, Field, Note, inputClass } from '../components/ui'
+import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
 import { IconPlus } from '../components/icons'
 
 const TYPE_OPTIONS: { value: ContractorType; label: string }[] = [
@@ -21,6 +22,35 @@ export function Contractors() {
 
   const selected = contractors.find((c) => c.id === selectedId) ?? null
   const create = () => setSelectedId(addContractor())
+
+  const [innBusy, setInnBusy] = useState(false)
+  const [innMsg, setInnMsg] = useState<string | null>(null)
+  const onLookup = async () => {
+    if (!selected) return
+    if (!isValidInnLength(selected.inn)) {
+      setInnMsg('Введите ИНН: 10 цифр для организации или 12 для ИП.')
+      return
+    }
+    setInnBusy(true)
+    setInnMsg(null)
+    const info = await lookupInn(selected.inn)
+    setInnBusy(false)
+    if (!info) {
+      setInnMsg(
+        getDadataToken()
+          ? 'По этому ИНН ничего не найдено.'
+          : 'Демо-ИНН не распознан. Для любых ИНН укажите бесплатный ключ DaData в «Настройках».'
+      )
+      return
+    }
+    updateContractor(selected.id, {
+      type: info.type === 'ip' ? 'ip' : 'ul',
+      name: info.name || selected.name,
+      kpp: info.kpp || selected.kpp,
+      address: info.address || selected.address,
+    })
+    setInnMsg('Заполнено по ИНН ✓')
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -112,13 +142,24 @@ export function Contractors() {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <Field label="ИНН">
-                  <input
-                    className={inputClass}
-                    inputMode="numeric"
-                    placeholder="7700000000"
-                    value={selected.inn}
-                    onChange={(e) => updateContractor(selected.id, { inn: e.target.value.replace(/\D/g, '') })}
-                  />
+                  <div className="flex gap-2">
+                    <input
+                      className={inputClass}
+                      inputMode="numeric"
+                      placeholder="7700000000"
+                      value={selected.inn}
+                      onChange={(e) => updateContractor(selected.id, { inn: e.target.value.replace(/\D/g, '') })}
+                    />
+                    <button
+                      type="button"
+                      onClick={onLookup}
+                      disabled={innBusy}
+                      className="shrink-0 cursor-pointer rounded-lg border border-line px-3 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
+                    >
+                      {innBusy ? '…' : 'Найти'}
+                    </button>
+                  </div>
+                  {innMsg && <span className="mt-1 block text-xs text-muted">{innMsg}</span>}
                 </Field>
                 <Field label="КПП" hint={selected.type === 'ul' ? undefined : 'Только у юр. лиц'}>
                   <input
@@ -160,8 +201,9 @@ export function Contractors() {
 
       <div className="mt-5">
         <Note>
-          Автозаполнение по ИНН из ЕГРЮЛ/ЕГРИП появится позже — пока реквизиты вводятся вручную.
-          Данные хранятся локально в браузере по организации.
+          Кнопка «Найти» рядом с ИНН подставляет наименование, КПП и адрес. Несколько ИНН работают
+          в демо-режиме; для любых — укажите бесплатный ключ DaData в «Настройках». Данные хранятся
+          локально по организации.
         </Note>
       </div>
     </div>
