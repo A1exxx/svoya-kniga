@@ -101,6 +101,23 @@ def calc_vat_usn(
             notes=notes,
         )
 
+    # Доход выше потолка УСН (450 млн) — спец-ставки 5/7% неприменимы (право на УСН утрачено).
+    if mode in ("auto", "rate5", "rate7") and inc > VAT_RATE7_LIMIT:
+        notes.append(
+            "Доход превысил 450 млн ₽ — право на УСН утрачено: НДС считается по общей системе "
+            "(ОСНО, ставка 20%); спец-ставка 5/7% неприменима."
+        )
+        return VatResult(
+            obligated=True,
+            exempt=False,
+            rate=Decimal("0"),
+            base=round_rub(inc),
+            vat=Decimal("0"),
+            input_vat_deducted=Decimal("0"),
+            mode="usn_lost",
+            notes=notes,
+        )
+
     # Определение ставки.
     if mode == "auto":
         rate = Decimal("5") if inc <= VAT_RATE5_LIMIT else Decimal("7")

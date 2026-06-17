@@ -75,6 +75,24 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
     };
   }
 
+  // Доход выше потолка УСН (450 млн) — спец-ставки 5/7% неприменимы (право на УСН утрачено).
+  if ((mode === 'auto' || mode === 'rate5' || mode === 'rate7') && inc.gt(VAT_RATE7_LIMIT)) {
+    notes.push(
+      'Доход превысил 450 млн ₽ — право на УСН утрачено: НДС по общей системе (ОСНО, 20%); ' +
+        'спец-ставка 5/7% неприменима.'
+    );
+    return {
+      obligated: true,
+      exempt: false,
+      rate: new Decimal('0'),
+      base: roundRub(inc),
+      vat: new Decimal('0'),
+      input_vat_deducted: new Decimal('0'),
+      mode: 'usn_lost',
+      notes,
+    };
+  }
+
   let rate: Decimal;
   let appliedMode: string;
   if (mode === 'auto') {

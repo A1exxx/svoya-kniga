@@ -292,7 +292,11 @@ function VacationCalc({ year }: { year: number }) {
           <Card title="Как посчитано">
             <Row label="Среднедневной заработок" hint="база ÷ 12 ÷ 29,3" value={dec(r.avg_daily)} />
             <Row label={`Отпускные (× ${days} дн.)`} value={dec(r.gross)} strong />
-            <Row label="− НДФЛ" hint="13%" value={dec(r.ndfl)} />
+            <Row
+              label="− НДФЛ"
+              hint={r.gross.toNumber() > 0 ? pct(r.ndfl.div(r.gross)) : 'прогрессия от выплаты'}
+              value={dec(r.ndfl)}
+            />
             <Row label="= На руки" value={dec(r.net)} strong />
           </Card>
           {r.notes.map((n, i) => (
@@ -341,9 +345,20 @@ function SickCalc({ year }: { year: number }) {
             <div className="mt-3 border-t border-line pt-2">
               <Row label="За счёт работодателя" hint="первые дни" value={dec(r.employer_part)} />
               <Row label="За счёт СФР" value={dec(r.sfr_part)} />
-              <Row label="− НДФЛ" hint="13%" value={dec(r.ndfl)} />
+              <Row
+                label="− НДФЛ"
+                hint={r.total.toNumber() > 0 ? pct(r.ndfl.div(r.total)) : 'прогрессия от выплаты'}
+                value={dec(r.ndfl)}
+              />
             </div>
           </Card>
+          {r.notes.map((n, i) => (
+            <Note key={i}>{n}</Note>
+          ))}
+          <Note>
+            НДФЛ показан по прогрессивной шкале от суммы выплаты (без учёта прочих доходов сотрудника
+            за год) — итог за год сверяется бухгалтером.
+          </Note>
         </div>
       )}
     </div>

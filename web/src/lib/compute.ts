@@ -3,8 +3,12 @@
  * Если за год есть операции в «Деньгах» — считаем ПОКВАРТАЛЬНО нарастающим итогом
  * (как Эльба): доходы/расходы группируются по кварталам, авансы — за каждый период.
  * Иначе — годовой расчёт из ручных доходов/расходов на экране «Налоги».
+ *
+ * ВАЖНО: суммы агрегируются в Decimal (decimal.js), а не в JS-number, чтобы копейки
+ * из операций не накапливали float-погрешность и не сбивали округление налога.
  */
-import { calcContributions, usnCalendar, usnQuick, calcUsn, type PeriodData } from './taxcore'
+import Decimal from 'decimal.js'
+import { calcContributions, usnCalendar, usnQuick, calcUsn, toDecimal, type PeriodData } from './taxcore'
 import type { Org } from '../state/orgStore'
 import type { Operation } from '../state/opsStore'
 
@@ -16,9 +20,9 @@ export interface QuarterAgg {
   expense: number
 }
 
-function cumulative(a: number[]): number[] {
+function cumulative(a: Decimal[]): Decimal[] {
   const r = [...a]
-  for (let i = 1; i < r.length; i++) r[i] += r[i - 1]
+  for (let i = 1; i < r.length; i++) r[i] = r[i].plus(r[i - 1])
   return r
 }
 
@@ -42,14 +46,14 @@ export function compute(org: Org, ops: Operation[] = []) {
     return { contr, usn, calendar, quarterly: false, byQuarter: [] as QuarterAgg[] }
   }
 
-  // --- Поквартальный режим (есть операции): нарастающим итогом ---
-  const inc = [0, 0, 0, 0]
-  const exp = [0, 0, 0, 0]
+  // --- Поквартальный режим (есть операции): нарастающим итогом, всё в Decimal ---
+  const inc = [new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)]
+  const exp = [new Decimal(0), new Decimal(0), new Decimal(0), new Decimal(0)]
   for (const o of yearOps) {
     const q = Math.floor((Number(o.date.slice(5, 7)) - 1) / 3)
     if (q < 0 || q > 3) continue
-    if (o.kind === 'income') inc[q] += o.amount
-    else exp[q] += o.amount
+    if (o.kind === 'income') inc[q] = inc[q].plus(toDecimal(o.amount))
+    else exp[q] = exp[q].plus(toDecimal(o.amount))
   }
   const incCum = cumulative(inc)
   const expCum = cumulative(exp)
@@ -61,8 +65,8 @@ export function compute(org: Org, ops: Operation[] = []) {
   })
   // Взносы к вычету (для «доходы») считаем уплаченными равномерно по кварталам —
   // это и рекомендует Эльба для равномерного уменьшения авансов.
-  const totalDeduct = org.usnObject === 'income' ? contr.total.toNumber() : 0
-  const dedCum = [0.25, 0.5, 0.75, 1].map((k) => totalDeduct * k)
+  const totalDeduct = org.usnObject === 'income' ? contr.total : new Decimal(0)
+  const dedCum = [totalDeduct.div(4), totalDeduct.div(2), totalDeduct.times(3).div(4), totalDeduct]
 
   const periods: PeriodData[] = [0, 1, 2, 3].map((i) => ({
     label: QUARTER_LABELS[i],
@@ -75,8 +79,8 @@ export function compute(org: Org, ops: Operation[] = []) {
   const calendar = usnCalendar(org.year, usn, contr)
   const byQuarter: QuarterAgg[] = [0, 1, 2, 3].map((i) => ({
     label: `${i + 1} кв`,
-    income: inc[i],
-    expense: exp[i],
+    income: inc[i].toNumber(),
+    expense: exp[i].toNumber(),
   }))
   return { contr, usn, calendar, quarterly: true, byQuarter }
 }

@@ -85,4 +85,10 @@ describe('calcVatUsn — прочее', () => {
   it('порог = 60 млн', () => {
     expect(VAT_EXEMPT_THRESHOLD.toNumber()).toBe(60_000_000);
   });
+
+  it('доход >450 млн → УСН утрачена (usn_lost), спец-ставка не считается', () => {
+    const r = calcVatUsn(2026, 500_000_000, { mode: 'auto' });
+    expect(r.mode).toBe('usn_lost');
+    expect(r.vat.toNumber()).toBe(0);
+  });
 });

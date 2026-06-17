@@ -87,3 +87,10 @@ def test_negative_income_raises():
 
 def test_threshold_constant():
     assert VAT_EXEMPT_THRESHOLD == Decimal("60000000")
+
+
+def test_above_usn_limit_blocks_special_rate():
+    # >450 млн — право на УСН утрачено, спец-ставка 7% не считается.
+    r = calc_vat_usn(2026, 500_000_000, mode="auto")
+    assert r.mode == "usn_lost"
+    assert r.vat == Decimal("0")

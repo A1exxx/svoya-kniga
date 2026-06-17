@@ -304,7 +304,12 @@ export function Taxes() {
                     </button>
                   ))}
                 </div>
-                {vatRes && vatRes.exempt ? (
+                {vatRes && vatRes.mode === 'usn_lost' ? (
+                  <Note tone="warn">
+                    {vatRes.notes[vatRes.notes.length - 1] ||
+                      'Доход превысил 450 млн ₽ — право на УСН утрачено.'}
+                  </Note>
+                ) : vatRes && vatRes.exempt ? (
                   <Note>
                     Освобождён от НДС: годовой доход {formatRub(o.income)} ≤ 60 млн ₽ (ст. 145 НК РФ).
                     Большинству ИП на УСН НДС платить не нужно.
