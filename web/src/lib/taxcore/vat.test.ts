@@ -91,4 +91,16 @@ describe('calcVatUsn — прочее', () => {
     expect(r.mode).toBe('usn_lost');
     expect(r.vat.toNumber()).toBe(0);
   });
+
+  it('ручной 5% при доходе ≤60 млн → освобождение (НДС не начисляется)', () => {
+    const r = calcVatUsn(2026, 50_000_000, { mode: 'rate5' });
+    expect(r.exempt).toBe(true);
+    expect(r.vat.toNumber()).toBe(0);
+  });
+
+  it('ручной 5% при доходе 300 млн → ставка по закону 7% (не занижается)', () => {
+    const r = calcVatUsn(2026, 300_000_000, { mode: 'rate5', incomeIncludesVat: true });
+    expect(r.rate.toNumber()).toBe(7);
+    expect(r.vat.toNumber()).toBe(19_626_168);
+  });
 });

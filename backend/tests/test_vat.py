@@ -94,3 +94,17 @@ def test_above_usn_limit_blocks_special_rate():
     r = calc_vat_usn(2026, 500_000_000, mode="auto")
     assert r.mode == "usn_lost"
     assert r.vat == Decimal("0")
+
+
+def test_manual_rate5_below_threshold_is_exempt():
+    # Ручной выбор 5% при доходе ≤60 млн не должен начислять НДС — освобождение по ст.145.
+    r = calc_vat_usn(2026, 50_000_000, mode="rate5")
+    assert r.exempt is True
+    assert r.vat == Decimal("0")
+
+
+def test_manual_rate5_at_300m_uses_legal_rate7():
+    # Ручной 5% при доходе 300 млн — ставка определяется доходом → 7% (не занижается).
+    r = calc_vat_usn(2026, 300_000_000, mode="rate5", income_includes_vat=True)
+    assert r.rate == Decimal("7")
+    assert r.vat == Decimal("19626168")

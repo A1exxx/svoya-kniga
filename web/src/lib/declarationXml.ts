@@ -75,8 +75,21 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
   const pr = (i: number, fn: (p: (typeof periods)[number]) => { toNumber: () => number }) =>
     rub(periods[i] ? fn(periods[i]) : 0)
 
+  // Накопленные доходы/расходы по периодам (для раздела 2.2 «доходы−расходы»).
+  const incCum: number[] = []
+  const expCum: number[] = []
+  {
+    let ai = 0
+    let ae = 0
+    for (let i = 0; i < 4; i++) {
+      ai += computed.byQuarter[i]?.income ?? 0
+      ae += computed.byQuarter[i]?.expense ?? 0
+      incCum[i] = ai
+      expCum[i] = ae
+    }
+  }
+
   // --- Раздел расчёта (2.1.1 «доходы» или 2.2 «доходы−расходы») ---
-  // При поквартальном учёте заполняем все строки по периодам; иначе — годовые.
   const calcSection = isIncome
     ? [
         `      <РасчНалог_Дох ПризнНП="${org.hasEmployees ? '2' : '1'}">`,
@@ -106,34 +119,62 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
       ]
     : [
         `      <РасчНалог_ДохРасх>`,
-        line('213', rub(annualIncome)),
-        line('223', rub(annualExpense)),
-        line('243', rub(yearP.tax_base_cumulative)),
-        line('263', String(ratePct)),
-        line('273', rub(computed.usn.tax_year_computed)),
-        line('280', rub(computed.usn.min_tax)),
+        ...(quarterly
+          ? [
+              line('210', rub(incCum[0])),
+              line('211', rub(incCum[1])),
+              line('212', rub(incCum[2])),
+              line('213', rub(incCum[3])),
+              line('220', rub(expCum[0])),
+              line('221', rub(expCum[1])),
+              line('222', rub(expCum[2])),
+              line('223', rub(expCum[3])),
+              line('240', pr(0, (p) => p.tax_base_cumulative)),
+              line('241', pr(1, (p) => p.tax_base_cumulative)),
+              line('242', pr(2, (p) => p.tax_base_cumulative)),
+              line('243', pr(3, (p) => p.tax_base_cumulative)),
+              line('263', String(ratePct)),
+              line('270', pr(0, (p) => p.tax_before_deduction_cumulative)),
+              line('271', pr(1, (p) => p.tax_before_deduction_cumulative)),
+              line('272', pr(2, (p) => p.tax_before_deduction_cumulative)),
+              line('273', pr(3, (p) => p.tax_before_deduction_cumulative)),
+              line('280', rub(computed.usn.min_tax)),
+            ]
+          : [
+              line('213', rub(annualIncome)),
+              line('223', rub(annualExpense)),
+              line('243', rub(yearP.tax_base_cumulative)),
+              line('263', String(ratePct)),
+              line('273', rub(computed.usn.tax_year_computed)),
+              line('280', rub(computed.usn.min_tax)),
+            ]),
         `      </РасчНалог_ДохРасх>`,
       ]
 
   // --- Раздел 1.1 / 1.2 «Сумма налога к уплате» ---
+  // Минимальный налог (только Д-Р, когда он больше расчётного) идёт в строку 120,
+  // обычный налог — в строку 100. Нельзя выводить обе → задвоение обязательства.
+  const minApplied = !isIncome && computed.usn.min_tax.gt(computed.usn.tax_year_computed)
+  const sumLines: string[] = []
+  if (quarterly) {
+    sumLines.push(line('020', pr(0, (p) => p.advance_due_this_period)))
+    sumLines.push(line('040', pr(1, (p) => p.advance_due_this_period)))
+    if (periods[1].overpayment_this_period.toNumber() > 0)
+      sumLines.push(line('050', pr(1, (p) => p.overpayment_this_period))) // к уменьшению за полугодие
+    sumLines.push(line('070', pr(2, (p) => p.advance_due_this_period)))
+    if (periods[2].overpayment_this_period.toNumber() > 0)
+      sumLines.push(line('080', pr(2, (p) => p.overpayment_this_period))) // к уменьшению за 9 мес
+  }
+  if (minApplied) sumLines.push(line('120', rub(computed.usn.year_payment_due)))
+  else sumLines.push(line('100', rub(computed.usn.year_payment_due)))
+  if (computed.usn.year_overpayment.toNumber() > 0)
+    sumLines.push(line('110', rub(computed.usn.year_overpayment)))
+
   const sumSection = [
     `      <СумУСН ${isIncome ? 'Раздел="1.1"' : 'Раздел="1.2"'} КБК="${kbk}" ОКТМО="00000000">`,
-    ...(quarterly
-      ? [
-          line('020', pr(0, (p) => p.advance_due_this_period)), // аванс за 1 квартал
-          line('040', pr(1, (p) => p.advance_due_this_period)), // аванс за полугодие
-          line('070', pr(2, (p) => p.advance_due_this_period)), // аванс за 9 месяцев
-          line('100', rub(computed.usn.year_payment_due)), // налог к доплате за год
-        ]
-      : [line('100', rub(computed.usn.tax_year_final))]),
-    computed.usn.year_overpayment.toNumber() > 0
-      ? line('110', rub(computed.usn.year_overpayment)) // к уменьшению
-      : '',
-    !isIncome && computed.usn.min_tax.gt(computed.usn.tax_year_computed)
-      ? line('120', rub(computed.usn.min_tax)) // мин. налог к уплате
-      : '',
+    ...sumLines,
     `      </СумУСН>`,
-  ].filter(Boolean)
+  ]
 
   const xml = [
     `<?xml version="1.0" encoding="UTF-8"?>`,

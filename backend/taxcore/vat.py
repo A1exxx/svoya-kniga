@@ -84,8 +84,9 @@ def calc_vat_usn(
             "проверить актуальное значение."
         )
 
-    # Освобождение: режим 'none' или авто-режим при доходе ≤ 60 млн.
-    if mode == "none" or (mode == "auto" and not obligated):
+    # Освобождение: явный режим «без НДС» ИЛИ доход ≤ 60 млн (любой режим — нельзя
+    # начислять НДС, когда бизнес освобождён по ст. 145).
+    if mode == "none" or not obligated:
         if not obligated:
             notes.append("Доход ≤ 60 млн ₽ — освобождение от НДС (ст. 145 НК РФ).")
         else:
@@ -118,16 +119,17 @@ def calc_vat_usn(
             notes=notes,
         )
 
-    # Определение ставки.
-    if mode == "auto":
+    # Определение ставки. Спец-ставка ЖЁСТКО определяется доходом (ст. 164 НК): 5% при
+    # 60–250 млн, 7% при 250–450 млн — выбрать «5%» при доходе 300 млн нельзя.
+    if mode == "general20":
+        rate, applied_mode = Decimal("20"), "general20"
+    elif mode in ("auto", "rate5", "rate7"):
         rate = Decimal("5") if inc <= VAT_RATE5_LIMIT else Decimal("7")
         applied_mode = "rate5" if rate == Decimal("5") else "rate7"
-    elif mode == "rate5":
-        rate, applied_mode = Decimal("5"), "rate5"
-    elif mode == "rate7":
-        rate, applied_mode = Decimal("7"), "rate7"
-    elif mode == "general20":
-        rate, applied_mode = Decimal("20"), "general20"
+        if mode == "rate5" and rate != Decimal("5"):
+            notes.append("При доходе свыше 250 млн ₽ применяется ставка 7%, а не 5% (ст. 164 НК РФ).")
+        elif mode == "rate7" and rate != Decimal("7"):
+            notes.append("При доходе до 250 млн ₽ применяется ставка 5%, а не 7% (ст. 164 НК РФ).")
     else:
         raise ValueError(f"Неизвестный режим НДС: {mode!r}")
 

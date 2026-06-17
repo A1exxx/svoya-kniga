@@ -57,7 +57,7 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
     );
   }
 
-  if (mode === 'none' || (mode === 'auto' && !obligated)) {
+  if (mode === 'none' || !obligated) {
     notes.push(
       obligated
         ? 'НДС не начисляется по выбору (режим «без НДС»).'
@@ -95,20 +95,18 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
 
   let rate: Decimal;
   let appliedMode: string;
-  if (mode === 'auto') {
-    rate = inc.lte(VAT_RATE5_LIMIT) ? new Decimal('5') : new Decimal('7');
-    appliedMode = rate.eq(5) ? 'rate5' : 'rate7';
-  } else if (mode === 'rate5') {
-    rate = new Decimal('5');
-    appliedMode = 'rate5';
-  } else if (mode === 'rate7') {
-    rate = new Decimal('7');
-    appliedMode = 'rate7';
-  } else if (mode === 'general20') {
+  if (mode === 'general20') {
     rate = new Decimal('20');
     appliedMode = 'general20';
   } else {
-    throw new Error(`Неизвестный режим НДС: ${mode}`);
+    // Спец-ставка определяется доходом (ст. 164 НК): 5% при 60–250 млн, 7% при 250–450 млн.
+    rate = inc.lte(VAT_RATE5_LIMIT) ? new Decimal('5') : new Decimal('7');
+    appliedMode = rate.eq(5) ? 'rate5' : 'rate7';
+    if (mode === 'rate5' && !rate.eq(5)) {
+      notes.push('При доходе свыше 250 млн ₽ применяется ставка 7%, а не 5% (ст. 164 НК РФ).');
+    } else if (mode === 'rate7' && !rate.eq(7)) {
+      notes.push('При доходе до 250 млн ₽ применяется ставка 5%, а не 7% (ст. 164 НК РФ).');
+    }
   }
 
   if (inc.gt(VAT_RATE7_LIMIT)) {

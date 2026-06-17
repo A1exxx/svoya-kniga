@@ -23,6 +23,8 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
   const quarterly = periods.length === 4
   const yearP = periods[periods.length - 1] // годовой (последний) период
   const ratePct = computed.usn.rate.times(100).toNumber()
+  // Минимальный налог (Д-Р) больше расчётного → к уплате идёт минимальный (строка 120).
+  const minApplied = !isIncome && computed.usn.min_tax.gt(computed.usn.tax_year_computed)
 
   // Доходы/расходы за год — из операций (если поквартально) или ручные.
   const annualIncome = quarterly
@@ -126,15 +128,32 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
             <>
               <Line code="020" label="Аванс к уплате за 1 квартал" value={pv(0, (p) => p.advance_due_this_period)} />
               <Line code="040" label="Аванс к уплате за полугодие" value={pv(1, (p) => p.advance_due_this_period)} />
+              {periods[1].overpayment_this_period.toNumber() > 0 && (
+                <Line code="050" label="Аванс к уменьшению за полугодие" value={pv(1, (p) => p.overpayment_this_period)} />
+              )}
               <Line code="070" label="Аванс к уплате за 9 месяцев" value={pv(2, (p) => p.advance_due_this_period)} />
-              <Line code="100" label="Налог к доплате за год" value={v(computed.usn.year_payment_due)} />
+              {periods[2].overpayment_this_period.toNumber() > 0 && (
+                <Line code="080" label="Аванс к уменьшению за 9 месяцев" value={pv(2, (p) => p.overpayment_this_period)} />
+              )}
+              {minApplied ? (
+                <Line code="120" label="Минимальный налог к уплате за год" value={v(computed.usn.year_payment_due)} />
+              ) : (
+                <Line code="100" label="Налог к доплате за год" value={v(computed.usn.year_payment_due)} />
+              )}
               {computed.usn.year_overpayment.toNumber() > 0 && (
                 <Line code="110" label="Налог к уменьшению за год" value={v(computed.usn.year_overpayment)} />
               )}
             </>
+          ) : minApplied ? (
+            <>
+              <Line code="120" label="Сумма минимального налога к уплате" value={v(computed.usn.year_payment_due)} />
+              {computed.usn.year_overpayment.toNumber() > 0 && (
+                <Line code="110" label="Сумма налога к уменьшению (переплата)" value={v(computed.usn.year_overpayment)} />
+              )}
+            </>
           ) : (
             <>
-              <Line code="100" label="Сумма налога, подлежащая уплате за налоговый период" value={v(computed.usn.tax_year_final)} />
+              <Line code="100" label="Сумма налога, подлежащая уплате за налоговый период" value={v(computed.usn.year_payment_due)} />
               {computed.usn.year_overpayment.toNumber() > 0 && (
                 <Line code="110" label="Сумма налога к уменьшению (переплата)" value={v(computed.usn.year_overpayment)} />
               )}
