@@ -8,6 +8,7 @@
  */
 import type { Org } from '../state/orgStore'
 import type { VatResult } from './taxcore'
+import type { VatBooks, VatBookLine } from './vatBooks'
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -27,15 +28,38 @@ export function vatDeclarationFileName(org: Org): string {
   return `NO_NDS_0000_0000_${inn}0000_${nowYmd()}.xml`
 }
 
+/** Строки книги (раздел 8/9) в XML. */
+function bookXml(tag: string, lines: VatBookLine[]): string[] {
+  if (!lines.length) return []
+  const rows = lines.map(
+    (l) =>
+      `      <${tag}Запись НомПор="${l.num}" Контрагент="${esc(l.party)}" ` +
+      `СтоимВсего="${rub(l.withVat)}" Ставка="${l.rate}" СумНДС="${rub(l.vat)}"/>`
+  )
+  return [`    <${tag}>`, ...rows, `    </${tag}>`]
+}
+
 /**
  * @param periodCode код налогового периода (квартал): 21=I, 22=II, 23=III, 24=IV.
+ * @param books строки книг продаж/покупок (раздел 9 / раздел 8). Раздел 8 — только для общей ставки.
  */
-export function vatDeclarationXml(org: Org, vat: VatResult, periodCode = '24'): string {
+export function vatDeclarationXml(
+  org: Org,
+  vat: VatResult,
+  periodCode = '24',
+  books?: VatBooks
+): string {
   const inn = org.inn || ''
   const oktmo = org.oktmo || '00000000'
   const toPay = rub(vat.vat)
   const base = rub(vat.base)
   const rate = vat.rate.toNumber()
+  const special = vat.mode === 'rate5' || vat.mode === 'rate7'
+
+  // Раздел 9 — книга продаж (всегда при наличии реализации с НДС).
+  // Раздел 8 — книга покупок (вычеты) — только при общей ставке (5/7% — без вычета).
+  const sec9 = books ? bookXml('Раздел9', books.sales) : []
+  const sec8 = books && !special ? bookXml('Раздел8', books.purchases) : []
 
   return [
     '<?xml version="1.0" encoding="windows-1251"?>',
@@ -46,6 +70,8 @@ export function vatDeclarationXml(org: Org, vat: VatResult, periodCode = '24'): 
     `      <Раздел1 ОКТМО="${esc(oktmo)}" КБК="18210301000011000110" НалПУ="${toPay}"/>`,
     `      <Раздел3 НалБаза="${base}" Ставка="${rate}" СумНал="${toPay}" ` +
       `ВычетВходящий="${rub(vat.input_vat_deducted)}"/>`,
+    ...sec8,
+    ...sec9,
     '    </НДС>',
     '  </Документ>',
     '</Файл>',

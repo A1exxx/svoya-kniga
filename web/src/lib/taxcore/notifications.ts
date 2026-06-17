@@ -8,7 +8,7 @@
  * Коды периода: ПП/ММ, где ПП = квартал (21/31/33/34), ММ = 01..03 (1–22) или 11..13 (23–конец).
  */
 import Decimal from 'decimal.js'
-import { shiftToWorkday, dateToIso, makeDate, roundRub } from './money.js'
+import { shiftToWorkday, shiftToWorkdayBack, dateToIso, makeDate, roundRub } from './money.js'
 import { NDFL_TIERS, type SalaryResult } from './payroll.js'
 
 /** Предельная (маржинальная) ставка НДФЛ, % при кумулятивной базе с начала года. */
@@ -49,11 +49,7 @@ export function periodCodeUsnAdvance(quarter: 1 | 2 | 3): string {
 export function dueDateNdfl(year: number, month: number, half: 1 | 2): string {
   if (half === 1) return dateToIso(shiftToWorkday(makeDate(year, month, 25)))
   // вторая половина — до 3 числа следующего месяца; декабрь (23–31) — последний рабочий день года.
-  if (month === 12) {
-    const d = makeDate(year, 12, 31)
-    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() - 1)
-    return dateToIso(d)
-  }
+  if (month === 12) return dateToIso(shiftToWorkdayBack(makeDate(year, 12, 31)))
   return dateToIso(shiftToWorkday(makeDate(year, month + 1, 3)))
 }
 

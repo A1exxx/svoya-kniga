@@ -31,6 +31,7 @@ import { SendDemoModal } from '../components/SendDemoModal'
 import { compute } from '../lib/compute'
 import { calcVatUsn } from '../lib/taxcore'
 import { vatDeclarationXml, vatDeclarationFileName } from '../lib/vatDeclarationXml'
+import { buildVatBooks } from '../lib/vatBooks'
 import { downloadText } from '../lib/download'
 
 const VAT_OPTIONS: { value: VatMode; label: string }[] = [
@@ -73,6 +74,9 @@ export function Documents() {
   const inputVat = docs
     .filter((d) => d.direction === 'incoming' && d.vatMode !== 'none')
     .reduce((s, d) => s + docTotals(d).vat, 0)
+
+  // Книги продаж/покупок (раздел 9 / раздел 8 декларации НДС).
+  const vatBooks = buildVatBooks(docs)
 
   let vatRes: ReturnType<typeof compute>['vat'] = null
   if (activeOrg.vat) {
@@ -233,7 +237,7 @@ export function Documents() {
               type="button"
               disabled={!vatRes}
               onClick={() =>
-                vatRes && downloadText(vatDeclarationFileName(activeOrg), vatDeclarationXml(activeOrg, vatRes), 'application/xml;charset=windows-1251')
+                vatRes && downloadText(vatDeclarationFileName(activeOrg), vatDeclarationXml(activeOrg, vatRes, '24', vatBooks), 'application/xml;charset=windows-1251')
               }
               className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
             >
@@ -507,7 +511,7 @@ export function Documents() {
       )}
       {vatView === 'decl' && vatRes && (
         <PrintModal title="Декларация по НДС — предпросмотр" onClose={() => setVatView(null)}>
-          <VatDeclarationDoc org={activeOrg} vat={vatRes} />
+          <VatDeclarationDoc org={activeOrg} vat={vatRes} books={vatBooks} />
         </PrintModal>
       )}
       {vatSend && <SendDemoModal docTitle="Декларация по НДС" onClose={() => setVatSend(false)} />}

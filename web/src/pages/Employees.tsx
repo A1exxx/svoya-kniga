@@ -7,6 +7,7 @@ import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
 import { sickBases, vacationBase12m } from '../lib/earnings'
 import { payrollSummary, employeeSalaryOptions } from '../lib/payrollSummary'
 import { validateSnils } from '../lib/validation'
+import { checkMspOkved } from '../lib/mspOkved'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -219,6 +220,14 @@ function StaffRoster({ year }: { year: number }) {
                   <span className="text-sm text-ink">МСП (льгота)</span>
                 </label>
               </div>
+              {selected.msp &&
+                (() => {
+                  const c = checkMspOkved(activeOrg.okved, activeOrg.year)
+                  if (!c.warning) return null
+                  return (
+                    <p className={`mt-2 text-xs ${c.inList ? 'text-muted' : 'text-red-600'}`}>{c.warning}</p>
+                  )
+                })()}
             </div>
           </Card>
 
@@ -427,6 +436,7 @@ function StaffRoster({ year }: { year: number }) {
 // ---- Зарплата ----
 function SalaryCalc({ year }: { year: number }) {
   const { employees } = useEmployees()
+  const { activeOrg } = useOrg()
   const [selId, setSelId] = useState('')
   const [gross, setGross] = useState(80_000)
   const [children, setChildren] = useState(0)
@@ -474,6 +484,12 @@ function SalaryCalc({ year }: { year: number }) {
             />
             <span className="text-sm text-ink">ИП в реестре МСП (льгота по взносам)</span>
           </label>
+          {msp &&
+            (() => {
+              const c = checkMspOkved(activeOrg.okved, activeOrg.year)
+              if (!c.warning) return null
+              return <p className={`text-xs ${c.inList ? 'text-muted' : 'text-red-600'}`}>{c.warning}</p>
+            })()}
           {r && r.child_deduction_monthly.toNumber() > 0 && (
             <p className="text-xs text-muted">Вычет на детей: {dec(r.child_deduction_monthly)}/мес</p>
           )}

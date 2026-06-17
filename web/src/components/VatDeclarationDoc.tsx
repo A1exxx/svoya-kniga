@@ -1,8 +1,70 @@
-import { formatRub } from '../lib/format'
+import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { VatResult } from '../lib/taxcore'
+import { sumVat, type VatBooks, type VatBookLine } from '../lib/vatBooks'
 
 const r0 = (n: number) => formatRub(Math.round(n))
+const rk = (n: number) => formatRub(n, { kopecks: true })
+
+/** Таблица раздела книги (8 — покупки / 9 — продажи). */
+function BookSection({
+  code,
+  title,
+  partyLabel,
+  lines,
+}: {
+  code: string
+  title: string
+  partyLabel: string
+  lines: VatBookLine[]
+}) {
+  const t = sumVat(lines)
+  return (
+    <>
+      <div className="mt-5 mb-2 font-semibold">
+        {code}. {title}
+      </div>
+      {lines.length === 0 ? (
+        <p className="text-[12px] text-slate-500">Нет документов с НДС за период.</p>
+      ) : (
+        <table className="w-full border-collapse text-[12px]">
+          <thead>
+            <tr className="border-y border-slate-300 text-left">
+              <th className="w-8 py-1 pr-2 font-semibold">№</th>
+              <th className="py-1 pr-2 font-semibold">Документ</th>
+              <th className="py-1 pr-2 font-semibold">Дата</th>
+              <th className="py-1 pr-2 font-semibold">{partyLabel}</th>
+              <th className="py-1 pr-2 text-right font-semibold">Стоимость с НДС</th>
+              <th className="py-1 pr-2 text-right font-semibold">Ставка</th>
+              <th className="py-1 text-right font-semibold">НДС</th>
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.num} className="border-b border-slate-200 align-top">
+                <td className="py-1 pr-2">{l.num}</td>
+                <td className="py-1 pr-2">{l.doc}</td>
+                <td className="tnum py-1 pr-2">{formatDate(l.date)}</td>
+                <td className="py-1 pr-2">{l.party}</td>
+                <td className="tnum py-1 pr-2 text-right">{rk(l.withVat)}</td>
+                <td className="tnum py-1 pr-2 text-right">{l.rate}%</td>
+                <td className="tnum py-1 text-right">{rk(l.vat)}</td>
+              </tr>
+            ))}
+            <tr className="border-t-2 border-slate-300 font-semibold">
+              <td className="py-1 pr-2" colSpan={4}>
+                Итого
+              </td>
+              <td className="tnum py-1 pr-2 text-right">{rk(t.withVat)}</td>
+              <td />
+              <td className="tnum py-1 text-right">{rk(t.vat)}</td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </>
+  )
+}
 
 function L({ code, label, value }: { code: string; label: string; value: string }) {
   return (
@@ -15,7 +77,7 @@ function L({ code, label, value }: { code: string; label: string; value: string 
 }
 
 /** Печатная форма декларации по НДС (КНД 1151001), упрощённо для ИП на УСН-плательщика. */
-export function VatDeclarationDoc({ org, vat }: { org: Org; vat: VatResult }) {
+export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResult; books?: VatBooks }) {
   const rate = vat.rate.toNumber()
   const special = vat.mode === 'rate5' || vat.mode === 'rate7'
   return (
@@ -62,12 +124,29 @@ export function VatDeclarationDoc({ org, vat }: { org: Org; vat: VatResult }) {
               Специальная ставка {rate}% применяется без вычета входящего НДС (ст. 170 НК РФ).
             </p>
           )}
+
+          {books && (
+            <BookSection
+              code="Раздел 9"
+              title="Сведения из книги продаж"
+              partyLabel="Покупатель"
+              lines={books.sales}
+            />
+          )}
+          {books && !special && (
+            <BookSection
+              code="Раздел 8"
+              title="Сведения из книги покупок (вычеты)"
+              partyLabel="Поставщик"
+              lines={books.purchases}
+            />
+          )}
         </>
       )}
 
       <div className="mt-6 text-[11px] text-slate-400">
-        Демонстрационная форма (упрощённая). Полная декларация НДС включает книги покупок/продаж и
-        подаётся через оператора ЭДО. Перед сдачей сверьте с актуальной формой ФНС.
+        Демонстрационная форма (упрощённая). Разделы 8/9 формируются из книг покупок/продаж.
+        Реальная подача НДС — через оператора ЭДО. Перед сдачей сверьте с актуальной формой ФНС.
       </div>
     </div>
   )
