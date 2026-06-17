@@ -121,6 +121,21 @@ describe('ndflPeriodEntries — КБК на стыке ступеней разб
   })
 })
 
+describe('ndflPeriodEntries — тройное пересечение ступеней (13→15→18%)', () => {
+  // 600 000 × 12 = 7,2 млн/год: 13% на 2,4 млн (=312 000), 15% на 2,6 млн (=390 000),
+  // 18% на 2,2 млн (=396 000). Порог 5 млн пересекается в середине месяца — проверяем разбивку.
+  const salary = calcSalary(2026, 600_000, { months: 12 })
+  const entries = ndflPeriodEntries(salary)
+  const sumAt = (rate: number) =>
+    entries.filter((e) => e.ratePct === rate).reduce((s, e) => s + e.amount, 0)
+  it('13% == 312 000', () => expect(sumAt(13)).toBe(312_000))
+  it('15% == 390 000', () => expect(sumAt(15)).toBe(390_000))
+  it('18% == 396 000', () => expect(sumAt(18)).toBe(396_000))
+  it('сумма по КБК == ndfl_year', () => {
+    expect(sumAt(13) + sumAt(15) + sumAt(18)).toBe(salary.ndfl_year.toNumber())
+  })
+})
+
 describe('dueDateNdfl — декабрь, 2-я половина = последний рабочий день года', () => {
   it('2025: 31 декабря — среда (рабочий)', () => {
     expect(dueDateNdfl(2025, 12, 2)).toBe('2025-12-31')
