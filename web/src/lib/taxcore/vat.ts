@@ -13,12 +13,16 @@
  */
 import Decimal from 'decimal.js';
 import { roundRub, toDecimal, type DecimalLike } from './money.js';
+import { getParams } from './params.js';
 
-export const VAT_EXEMPT_THRESHOLD = new Decimal('60000000'); // ≤ → освобождение
-export const VAT_RATE5_LIMIT = new Decimal('250000000'); // 60–250 млн → 5%
-export const VAT_RATE7_LIMIT = new Decimal('450000000'); // 250–450 млн → 7%
+// Историч. дефолты (2025). Фактические пороги/ставка берутся из параметров года (getParams):
+// с 2026 порог освобождения 20 млн ₽ и общая ставка 22% (ФЗ № 425-ФЗ).
+export const VAT_EXEMPT_THRESHOLD = new Decimal('60000000');
+export const VAT_RATE5_LIMIT = new Decimal('250000000');
+export const VAT_RATE7_LIMIT = new Decimal('450000000');
 
-export type VatMode = 'auto' | 'none' | 'rate5' | 'rate7' | 'general20';
+/** Режим НДС. Спец-ставки 5/7 — без вычета; 10/общая — с вычетом. `general` = ставка года. */
+export type VatMode = 'auto' | 'none' | 'rate5' | 'rate7' | 'rate10' | 'general' | 'general20';
 
 export interface VatResult {
   obligated: boolean;
@@ -38,9 +42,20 @@ export interface CalcVatOptions {
   inputVat?: DecimalLike;
 }
 
-/** Расчёт НДС для ИП на УСН. */
+const D0 = () => new Decimal('0');
+
+/** Расчёт НДС для ИП на УСН (пороги и общая ставка — из параметров года). */
 export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptions = {}): VatResult {
-  const { priorYearIncome = 0, mode = 'auto', incomeIncludesVat = true, inputVat = 0 } = opts;
+  const { priorYearIncome = 0, incomeIncludesVat = true, inputVat = 0 } = opts;
+  let mode: VatMode = opts.mode ?? 'auto';
+  if (mode === 'general20') mode = 'general'; // обратная совместимость
+
+  const p = getParams(year);
+  const exemptThreshold = p.vat_exempt_threshold;
+  const rate5Limit = p.vat_rate5_limit;
+  const rate7Limit = p.vat_rate7_limit;
+  const generalRate = p.vat_general_rate;
+
   const inc = toDecimal(income);
   const prior = toDecimal(priorYearIncome);
   if (inc.lt(0) || prior.lt(0)) {
@@ -48,46 +63,41 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
   }
 
   const thresholdBase = Decimal.max(inc, prior);
-  const obligated = thresholdBase.gt(VAT_EXEMPT_THRESHOLD);
+  const obligated = thresholdBase.gt(exemptThreshold);
   const notes: string[] = [];
-
-  if (year >= 2027) {
-    notes.push(
-      'С 2027 порог освобождения от НДС планово снижается (15 млн ₽) — проверить актуальное значение.'
-    );
-  }
 
   if (mode === 'none' || !obligated) {
     notes.push(
       obligated
         ? 'НДС не начисляется по выбору (режим «без НДС»).'
-        : 'Доход ≤ 60 млн ₽ — освобождение от НДС (ст. 145 НК РФ).'
+        : `Доход ≤ ${exemptThreshold.toFixed(0)} ₽ — освобождение от НДС (ст. 145 НК РФ).`
     );
     return {
       obligated,
       exempt: !obligated,
-      rate: new Decimal('0'),
+      rate: D0(),
       base: roundRub(inc),
-      vat: new Decimal('0'),
-      input_vat_deducted: new Decimal('0'),
+      vat: D0(),
+      input_vat_deducted: D0(),
       mode: 'none',
       notes,
     };
   }
 
-  // Доход выше потолка УСН (450 млн) — спец-ставки 5/7% неприменимы (право на УСН утрачено).
-  if ((mode === 'auto' || mode === 'rate5' || mode === 'rate7') && inc.gt(VAT_RATE7_LIMIT)) {
+  // Спец-ставки 5/7 (и авто) недоступны при доходе выше потолка УСН — право на УСН утрачено.
+  const specialRequested = mode === 'auto' || mode === 'rate5' || mode === 'rate7';
+  if (specialRequested && inc.gt(rate7Limit)) {
     notes.push(
-      'Доход превысил 450 млн ₽ — право на УСН утрачено: НДС по общей системе (ОСНО, 20%); ' +
+      `Доход превысил ${rate7Limit.toFixed(0)} ₽ — право на УСН утрачено: НДС по общей системе; ` +
         'спец-ставка 5/7% неприменима.'
     );
     return {
       obligated: true,
       exempt: false,
-      rate: new Decimal('0'),
+      rate: D0(),
       base: roundRub(inc),
-      vat: new Decimal('0'),
-      input_vat_deducted: new Decimal('0'),
+      vat: D0(),
+      input_vat_deducted: D0(),
       mode: 'usn_lost',
       notes,
     };
@@ -95,29 +105,32 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
 
   let rate: Decimal;
   let appliedMode: string;
-  if (mode === 'general20') {
-    rate = new Decimal('20');
-    appliedMode = 'general20';
+  let special: boolean;
+  if (mode === 'general') {
+    rate = generalRate;
+    appliedMode = 'general';
+    special = false;
+  } else if (mode === 'rate10') {
+    rate = new Decimal('10');
+    appliedMode = 'rate10';
+    special = false;
   } else {
-    // Спец-ставка определяется доходом (ст. 164 НК): 5% при 60–250 млн, 7% при 250–450 млн.
-    rate = inc.lte(VAT_RATE5_LIMIT) ? new Decimal('5') : new Decimal('7');
+    // Спец-ставка определяется доходом (ст. 164 НК): 5% до rate5Limit, иначе 7%.
+    rate = inc.lte(rate5Limit) ? new Decimal('5') : new Decimal('7');
     appliedMode = rate.eq(5) ? 'rate5' : 'rate7';
+    special = true;
     if (mode === 'rate5' && !rate.eq(5)) {
-      notes.push('При доходе свыше 250 млн ₽ применяется ставка 7%, а не 5% (ст. 164 НК РФ).');
+      notes.push(`При доходе свыше ${rate5Limit.toFixed(0)} ₽ применяется 7%, а не 5% (ст. 164 НК РФ).`);
     } else if (mode === 'rate7' && !rate.eq(7)) {
-      notes.push('При доходе до 250 млн ₽ применяется ставка 5%, а не 7% (ст. 164 НК РФ).');
+      notes.push(`При доходе до ${rate5Limit.toFixed(0)} ₽ применяется 5%, а не 7% (ст. 164 НК РФ).`);
     }
-  }
-
-  if (inc.gt(VAT_RATE7_LIMIT)) {
-    notes.push('Доход превышает 450 млн ₽ — утрата права на УСН, проверить отдельно.');
   }
 
   let base: Decimal;
   let vat: Decimal;
   let deducted: Decimal;
 
-  if (rate.eq(5) || rate.eq(7)) {
+  if (special) {
     // Спец-ставки: база = выручка без НДС, вычет входящего не применяется.
     if (incomeIncludesVat) {
       base = inc.div(new Decimal('1').plus(rate.div(100)));
@@ -126,25 +139,25 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
       base = inc;
       vat = inc.times(rate).div(100);
     }
-    deducted = new Decimal('0');
+    deducted = D0();
     notes.push(`Специальная ставка ${rate}% — без вычета входящего НДС (ст. 170 НК РФ).`);
   } else {
-    // Общая ставка 20%: НДС = исходящий − входящий.
+    // Общая ставка (10/20/22): НДС = исходящий − входящий.
     let output: Decimal;
     if (incomeIncludesVat) {
-      base = inc.div(new Decimal('1.20'));
+      base = inc.div(new Decimal('1').plus(rate.div(100)));
       output = inc.minus(base);
     } else {
       base = inc;
-      output = inc.times('0.20');
+      output = inc.times(rate).div(100);
     }
     deducted = toDecimal(inputVat);
     if (deducted.lt(0)) {
       throw new Error('Входящий НДС не может быть отрицательным');
     }
     vat = output.minus(deducted);
-    if (vat.lt(0)) vat = new Decimal('0');
-    notes.push('Общая ставка 20% — с вычетом входящего НДС (ст. 171–172 НК РФ).');
+    if (vat.lt(0)) vat = D0();
+    notes.push(`Общая ставка ${rate}% — с вычетом входящего НДС (ст. 171–172 НК РФ).`);
   }
 
   return {

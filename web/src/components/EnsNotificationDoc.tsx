@@ -23,7 +23,7 @@ export function EnsNotificationDoc({ org, computed }: { org: Org; computed: Comp
     .filter((e) => e.kind === 'notification' && e.title.includes('аванс'))
     .map((e, i) => ({
       kbk,
-      oktmo: '00000000',
+      oktmo: org.oktmo || '00000000',
       period: ['34/01', '34/02', '34/03'][i] ?? '34',
       title: e.title.replace('Уведомление об исчисленном авансе УСН за', 'Аванс УСН за'),
       amount: e.amount,
@@ -35,7 +35,7 @@ export function EnsNotificationDoc({ org, computed }: { org: Org; computed: Comp
     ? [
         {
           kbk,
-          oktmo: '00000000',
+          oktmo: org.oktmo || '00000000',
           period: '34/03',
           title: 'Аванс по УСН (по итогам расчёта)',
           amount: computed.usn.tax_year_final,

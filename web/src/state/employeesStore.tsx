@@ -10,12 +10,29 @@ export interface Employee {
   salary: number
   /** Детей для стандартного вычета */
   children: number
-  /** Страховой стаж, лет (для больничных) */
+  /** Страховой стаж, лет (ручное значение / override) */
   stazhYears: number
-  /** Дата приёма на работу (для ЕФС-1) */
+  /** Как определять стаж: авто из даты приёма или вручную (по умолчанию auto) */
+  stazhMode?: 'auto' | 'manual'
+  /** Прежний стаж в месяцах (добавляется к авто-стажу) */
+  stazhPriorMonths?: number
+  /** Дата приёма на работу (для ЕФС-1 и авто-стажа) */
   hireDate: string // YYYY-MM-DD
+  /** Дата увольнения (если уволен) */
+  dismissalDate?: string // YYYY-MM-DD
+  /** День выплаты аванса (1–31), для уведомлений/отображения */
+  advanceDay?: number
+  /** Аванс, % от оклада (0 = без разбивки на аванс/расчёт) */
+  advancePercent?: number
+  /** Заработок по годам (для баз отпускных/больничных) */
+  earningsByYear?: Record<number, number>
   /** ИП в реестре МСП — льготный тариф взносов */
   msp: boolean
+  // Личные данные (для печатных форм карточки)
+  snils?: string
+  passport?: string
+  address?: string
+  birthDate?: string // YYYY-MM-DD
 }
 
 const KEY = 'svoyakniga.employees.v1'
@@ -69,7 +86,12 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       salary: 60000,
       children: 0,
       stazhYears: 5,
+      stazhMode: 'auto',
+      stazhPriorMonths: 0,
       hireDate: '',
+      advanceDay: 25,
+      advancePercent: 0,
+      earningsByYear: {},
       msp: true,
     }
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), e] }))

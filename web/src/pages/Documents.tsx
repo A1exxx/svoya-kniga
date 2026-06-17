@@ -2,10 +2,13 @@ import { useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import {
   DOC_TYPE_LABEL,
+  CONTRACT_KIND_LABEL,
   docTotals,
   useDocs,
   type DocItem,
   type DocType,
+  type DocDirection,
+  type ContractKind,
   type PaymentStatus,
   type VatMode,
 } from '../state/docsStore'
@@ -18,6 +21,14 @@ import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { InvoiceDoc } from '../components/InvoiceDoc'
 import { ContractDoc } from '../components/ContractDoc'
+import { WaybillDoc } from '../components/WaybillDoc'
+import { UpdDoc } from '../components/UpdDoc'
+import { SalesBookDoc } from '../components/SalesBookDoc'
+import { VatDeclarationDoc } from '../components/VatDeclarationDoc'
+import { SendDemoModal } from '../components/SendDemoModal'
+import { compute } from '../lib/compute'
+import { vatDeclarationXml, vatDeclarationFileName } from '../lib/vatDeclarationXml'
+import { downloadText } from '../lib/download'
 
 const VAT_OPTIONS: { value: VatMode; label: string }[] = [
   { value: 'none', label: 'Без НДС' },
@@ -25,6 +36,7 @@ const VAT_OPTIONS: { value: VatMode; label: string }[] = [
   { value: '7', label: 'НДС 7%' },
   { value: '10', label: 'НДС 10%' },
   { value: '20', label: 'НДС 20%' },
+  { value: '22', label: 'НДС 22%' },
 ]
 
 const PAY_BADGE: Record<PaymentStatus, { label: string; cls: string }> = {
@@ -46,14 +58,32 @@ export function Documents() {
   const { docs, addDoc, updateDoc, removeDoc } = useDocs()
   const { contractors } = useContractors()
   const { goods } = useGoods()
-  const { addOp, removeOp } = useOps()
+  const { addOp, removeOp, ops } = useOps()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
+  const [vatView, setVatView] = useState<'book' | 'decl' | null>(null)
+  const [vatSend, setVatSend] = useState(false)
+  const [direction, setDirection] = useState<DocDirection>('outgoing')
+  const incoming = direction === 'incoming'
+
+  let vatRes: ReturnType<typeof compute>['vat'] = null
+  if (activeOrg.vat) {
+    try {
+      vatRes = compute(activeOrg, ops).vat
+    } catch {
+      vatRes = null
+    }
+  }
 
   const selected = docs.find((d) => d.id === selectedId) ?? null
   const printDoc = docs.find((d) => d.id === printId) ?? null
+  const dirDocs = docs.filter((d) => d.direction === direction)
 
-  const create = (type: DocType) => setSelectedId(addDoc(type))
+  const create = (type: DocType) => setSelectedId(addDoc(type, direction))
+  const switchDirection = (d: DocDirection) => {
+    setDirection(d)
+    setSelectedId(docs.find((x) => x.direction === d)?.id ?? null)
+  }
 
   const setItem = (idx: number, patch: Partial<DocItem>) => {
     if (!selected) return
@@ -84,13 +114,14 @@ export function Documents() {
       paidDate: v === 'paid' ? today : undefined,
     }
     if (v === 'paid' && !selected.linkedOpId) {
+      // Исходящий оплачен → приход (доход); входящий оплачен → расход.
       patch.linkedOpId = addOp({
         date: selected.date || today,
-        kind: 'income',
+        kind: selected.direction === 'incoming' ? 'expense' : 'income',
         amount: docTotals(selected).subtotal,
         counterparty: selected.buyer,
-        doc: `Счёт № ${selected.number}`,
-        note: 'оплата по счёту',
+        doc: `${DOC_TYPE_LABEL[selected.type]} № ${selected.number}`,
+        note: selected.direction === 'incoming' ? 'оплата поставщику' : 'оплата по счёту',
         taxable: true,
       })
     } else if (v !== 'paid' && selected.linkedOpId) {
@@ -100,9 +131,13 @@ export function Documents() {
     updateDoc(selected.id, patch)
   }
 
-  // Мини-дебиторка: неоплаченные счета.
-  const unpaid = docs.filter((d) => d.type === 'invoice' && d.paymentStatus !== 'paid')
-  const debitorka = unpaid.reduce((s, d) => s + docTotals(d).subtotal, 0)
+  // Дебиторка — неоплаченные исходящие счета (нам должны); кредиторка — неоплаченные входящие (мы должны).
+  const outUnpaid = docs.filter(
+    (d) => d.direction === 'outgoing' && d.type === 'invoice' && d.paymentStatus !== 'paid'
+  )
+  const inUnpaid = docs.filter((d) => d.direction === 'incoming' && d.paymentStatus !== 'paid')
+  const debitorka = outUnpaid.reduce((s, d) => s + docTotals(d).subtotal, 0)
+  const kreditorka = inUnpaid.reduce((s, d) => s + docTotals(d).subtotal, 0)
 
   const isInvoice = selected?.type === 'invoice'
 
@@ -113,8 +148,29 @@ export function Documents() {
           <div className="text-sm text-muted">{activeOrg.name}</div>
           <h1 className="text-2xl font-semibold text-ink">Документы</h1>
           <p className="mt-1 text-sm text-muted">
-            Счета, акты, накладные и УПД. Реквизиты продавца берутся из «Реквизитов».
+            {incoming
+              ? 'Входящие — счета и акты, полученные от поставщиков.'
+              : 'Исходящие — счета, акты, накладные и УПД, которые вы выставляете.'}
           </p>
+          <div className="mt-3 inline-flex rounded-lg border border-line p-0.5">
+            {(
+              [
+                ['outgoing', 'Исходящие'],
+                ['incoming', 'Входящие'],
+              ] as [DocDirection, string][]
+            ).map(([val, label]) => (
+              <button
+                key={val}
+                type="button"
+                onClick={() => switchDirection(val)}
+                className={`cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  direction === val ? 'bg-brand-600 text-white' : 'text-muted hover:text-ink'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           {CREATE_BUTTONS.map(({ type, primary }) => (
@@ -134,21 +190,77 @@ export function Documents() {
         </div>
       </header>
 
+      {activeOrg.vat && (
+        <Card title="НДС: книга продаж и декларация" className="mb-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVatView('book')}
+              className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+            >
+              Книга продаж
+            </button>
+            <button
+              type="button"
+              onClick={() => setVatView('decl')}
+              className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+            >
+              Декларация НДС
+            </button>
+            <button
+              type="button"
+              disabled={!vatRes}
+              onClick={() =>
+                vatRes && downloadText(vatDeclarationFileName(activeOrg), vatDeclarationXml(activeOrg, vatRes), 'application/xml;charset=windows-1251')
+              }
+              className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
+            >
+              Скачать XML
+            </button>
+            <button
+              type="button"
+              onClick={() => setVatSend(true)}
+              className="cursor-pointer rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            >
+              Отправить (имитация)
+            </button>
+            {vatRes && !vatRes.exempt && vatRes.mode !== 'usn_lost' && (
+              <span className="ml-auto text-sm text-muted">
+                НДС к уплате: <span className="tnum font-semibold text-ink">{formatRub(vatRes.vat.toNumber())}</span> · ставка {vatRes.rate.toNumber()}%
+              </span>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            Книга продаж собирается из счетов/актов со ставкой НДС. Ставка по умолчанию — из «Реквизитов».
+            Реальная сдача НДС — только через оператора ЭДО (раздел «Налоговая»).
+          </p>
+        </Card>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         {/* Список документов */}
-        <Card title="Документы">
-          {debitorka > 0 && (
+        <Card title={incoming ? 'Входящие' : 'Исходящие'}>
+          {!incoming && debitorka > 0 && (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-warn">
-              Не оплачено: {unpaid.length} сч. на {formatRub(debitorka)}
+              Дебиторка: {outUnpaid.length} сч. на {formatRub(debitorka)} (нам должны)
             </div>
           )}
-          {docs.length === 0 ? (
-            <p className="text-sm text-muted">Пока нет документов. Создайте счёт, акт, накладную или УПД.</p>
+          {incoming && kreditorka > 0 && (
+            <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-warn">
+              Кредиторка: {inUnpaid.length} док. на {formatRub(kreditorka)} (мы должны)
+            </div>
+          )}
+          {dirDocs.length === 0 ? (
+            <p className="text-sm text-muted">
+              {incoming
+                ? 'Нет входящих документов. Добавьте полученный от поставщика счёт или акт.'
+                : 'Пока нет документов. Создайте счёт, акт, накладную или УПД.'}
+            </p>
           ) : (
             <div className="space-y-1">
-              {docs.map((d) => {
+              {dirDocs.map((d) => {
                 const { subtotal } = docTotals(d)
-                const badge = d.type === 'invoice' ? PAY_BADGE[d.paymentStatus] : null
+                const badge = d.type === 'invoice' || incoming ? PAY_BADGE[d.paymentStatus] : null
                 return (
                   <button
                     key={d.id}
@@ -221,6 +333,22 @@ export function Documents() {
                 </Field>
               </div>
 
+              {selected.type === 'contract' && (
+                <Field label="Вид договора">
+                  <select
+                    className={inputClass}
+                    value={selected.contractKind ?? 'services'}
+                    onChange={(e) => updateDoc(selected.id, { contractKind: e.target.value as ContractKind })}
+                  >
+                    {(Object.keys(CONTRACT_KIND_LABEL) as ContractKind[]).map((k) => (
+                      <option key={k} value={k}>
+                        {CONTRACT_KIND_LABEL[k]}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+
               {contractors.length > 0 && (
                 <Field label="Выбрать из справочника контрагентов">
                   <select className={inputClass} value="" onChange={(e) => pickContractor(e.target.value)}>
@@ -236,18 +364,30 @@ export function Documents() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={selected.type === 'act' || selected.type === 'contract' ? 'Заказчик' : 'Покупатель'}>
+                <Field
+                  label={
+                    incoming
+                      ? 'Поставщик (от кого)'
+                      : selected.type === 'act' || selected.type === 'contract'
+                        ? 'Заказчик'
+                        : 'Покупатель'
+                  }
+                >
                   <input className={inputClass} placeholder="ООО «Ромашка»" value={selected.buyer} onChange={(e) => updateDoc(selected.id, { buyer: e.target.value })} />
                 </Field>
-                <Field label="ИНН / адрес покупателя">
+                <Field label={incoming ? 'ИНН / адрес поставщика' : 'ИНН / адрес покупателя'}>
                   <input className={inputClass} placeholder="ИНН 7700000000, г. Москва" value={selected.buyerDetails} onChange={(e) => updateDoc(selected.id, { buyerDetails: e.target.value })} />
                 </Field>
               </div>
 
-              {isInvoice && (
+              {(isInvoice || incoming) && (
                 <Field
                   label="Статус оплаты"
-                  hint="при «Оплачен» создаётся поступление в «Деньгах» — попадёт в КУДиР и расчёт налога"
+                  hint={
+                    incoming
+                      ? 'при «Оплачен» создаётся расход в «Деньгах»'
+                      : 'при «Оплачен» создаётся поступление в «Деньгах» — попадёт в КУДиР и расчёт налога'
+                  }
                 >
                   <select
                     className={`${inputClass} max-w-[220px]`}
@@ -319,11 +459,27 @@ export function Documents() {
         <PrintModal title={`${DOC_TYPE_LABEL[printDoc.type]} № ${printDoc.number} — предпросмотр`} onClose={() => setPrintId(null)}>
           {printDoc.type === 'contract' ? (
             <ContractDoc org={activeOrg} doc={printDoc} />
+          ) : printDoc.type === 'waybill' ? (
+            <WaybillDoc org={activeOrg} doc={printDoc} />
+          ) : printDoc.type === 'upd' ? (
+            <UpdDoc org={activeOrg} doc={printDoc} />
           ) : (
             <InvoiceDoc org={activeOrg} doc={printDoc} />
           )}
         </PrintModal>
       )}
+
+      {vatView === 'book' && (
+        <PrintModal title="Книга продаж — предпросмотр" onClose={() => setVatView(null)}>
+          <SalesBookDoc org={activeOrg} docs={docs.filter((d) => d.direction === 'outgoing')} />
+        </PrintModal>
+      )}
+      {vatView === 'decl' && vatRes && (
+        <PrintModal title="Декларация по НДС — предпросмотр" onClose={() => setVatView(null)}>
+          <VatDeclarationDoc org={activeOrg} vat={vatRes} />
+        </PrintModal>
+      )}
+      {vatSend && <SendDemoModal docTitle="Декларация по НДС" onClose={() => setVatSend(false)} />}
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
+import type { InnStatus } from '../lib/innLookup'
 
 export type ContractorType = 'ul' | 'ip' | 'person'
 
@@ -12,6 +13,9 @@ export interface Contractor {
   kpp: string // только для юр. лиц
   address: string
   note: string
+  status?: InnStatus // результат проверки по ИНН (действующий/ликвидирован/…)
+  regDate?: string // дата регистрации (YYYY-MM-DD)
+  checkedAt?: string // когда проверяли (YYYY-MM-DD)
 }
 
 export const CONTRACTOR_TYPE_LABEL: Record<ContractorType, string> = {

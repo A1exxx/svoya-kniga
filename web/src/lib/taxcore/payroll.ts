@@ -199,6 +199,14 @@ export interface SalaryMonth {
   vznosy: Decimal;
   /** Взносы на травматизм */
   travmatizm: Decimal;
+  // Разбивка на аванс (выплата за 1-ю половину месяца) и окончательный расчёт.
+  // Инвариант: ndfl === advance_ndfl + settlement_ndfl (декомпозиция, не новый итог).
+  advance_gross: Decimal;
+  advance_ndfl: Decimal;
+  advance_net: Decimal;
+  settlement_gross: Decimal;
+  settlement_ndfl: Decimal;
+  settlement_net: Decimal;
 }
 
 export interface SalaryResult {
@@ -212,6 +220,10 @@ export interface SalaryResult {
   net_year: Decimal;
   vznosy_year: Decimal;
   travmatizm_year: Decimal;
+  /** НДФЛ с авансов за год (часть ndfl_year) */
+  advance_ndfl_year: Decimal;
+  /** НДФЛ с окончательных расчётов за год (часть ndfl_year) */
+  settlement_ndfl_year: Decimal;
   /** gross + взносы + травматизм */
   employer_cost_year: Decimal;
   child_deduction_monthly: Decimal;
@@ -225,6 +237,10 @@ export interface CalcSalaryOptions {
   msp?: boolean;
   travmatizmRate?: DecimalLike;
   months?: number;
+  /** Доля аванса от оклада, 0..1 (0 = без разбивки, прежнее поведение) */
+  advancePercent?: DecimalLike;
+  /** День выплаты аванса (только для отображения/уведомлений) */
+  advanceDay?: number;
 }
 
 /**
@@ -250,6 +266,9 @@ export function calcSalary(
   if (gross.lt(0)) {
     throw new Error('Оклад не может быть отрицательным');
   }
+  let advanceShare = opts.advancePercent !== undefined ? toDecimal(opts.advancePercent) : new Decimal('0');
+  if (advanceShare.lt(0)) advanceShare = new Decimal('0');
+  if (advanceShare.gt(1)) advanceShare = new Decimal('1');
   const travmRate =
     opts.travmatizmRate !== undefined ? toDecimal(opts.travmatizmRate) : p.travmatizm_default;
   const dedMonth = childDeductionMonthly(year, children, disabledChildren, singleParent);
@@ -273,15 +292,32 @@ export function calcSalary(
     const dedApplied = cumIncome.lte(p.deduction_income_limit) ? dedMonth : new Decimal('0');
     cumDeductions = cumDeductions.plus(dedApplied);
 
+    const cumNdflBefore = cumNdfl;
     let taxableCum = cumIncome.minus(cumDeductions);
     if (taxableCum.lt(0)) taxableCum = new Decimal('0');
 
     const ndflCum = ndflProgressive(taxableCum);
-    let ndflMonth = ndflCum.minus(cumNdfl);
+    let ndflMonth = ndflCum.minus(cumNdflBefore);
     if (ndflMonth.lt(0)) ndflMonth = new Decimal('0');
     cumNdfl = ndflCum;
 
     const net = money(gross.minus(ndflMonth));
+
+    // Разбивка на аванс (1-я половина месяца) и окончательный расчёт.
+    // Детский вычет применяется на этапе расчёта (как в 1С), поэтому база НДФЛ с аванса =
+    // доход до месяца + аванс − вычеты до месяца. Инвариант: advance_ndfl + settlement_ndfl == ndfl.
+    const advanceGross = money(gross.times(advanceShare));
+    const incomeBefore = cumIncome.minus(gross);
+    const dedBefore = cumDeductions.minus(dedApplied);
+    let advanceBaseCum = incomeBefore.plus(advanceGross).minus(dedBefore);
+    if (advanceBaseCum.lt(0)) advanceBaseCum = new Decimal('0');
+    let advanceNdfl = ndflProgressive(advanceBaseCum).minus(cumNdflBefore);
+    if (advanceNdfl.lt(0)) advanceNdfl = new Decimal('0');
+    if (advanceNdfl.gt(ndflMonth)) advanceNdfl = ndflMonth;
+    const advanceNet = money(advanceGross.minus(advanceNdfl));
+    const settlementGross = money(gross.minus(advanceGross));
+    const settlementNdfl = ndflMonth.minus(advanceNdfl);
+    const settlementNet = money(settlementGross.minus(settlementNdfl));
 
     // Страховые взносы
     let vznosy: Decimal;
@@ -312,6 +348,12 @@ export function calcSalary(
       net,
       vznosy: money(vznosy),
       travmatizm: money(travmatizm),
+      advance_gross: money(advanceGross),
+      advance_ndfl: money(advanceNdfl),
+      advance_net: advanceNet,
+      settlement_gross: money(settlementGross),
+      settlement_ndfl: money(settlementNdfl),
+      settlement_net: settlementNet,
     });
   }
 
@@ -323,6 +365,8 @@ export function calcSalary(
   const netYear = money(sumField((r) => r.net));
   const vznosyYear = money(sumField((r) => r.vznosy));
   const travmYear = money(sumField((r) => r.travmatizm));
+  const advanceNdflYear = money(sumField((r) => r.advance_ndfl));
+  const settlementNdflYear = money(sumField((r) => r.settlement_ndfl));
 
   return {
     year,
@@ -334,6 +378,8 @@ export function calcSalary(
     net_year: netYear,
     vznosy_year: vznosyYear,
     travmatizm_year: travmYear,
+    advance_ndfl_year: advanceNdflYear,
+    settlement_ndfl_year: settlementNdflYear,
     employer_cost_year: money(grossYear.plus(vznosyYear).plus(travmYear)),
     child_deduction_monthly: dedMonth,
     notes,

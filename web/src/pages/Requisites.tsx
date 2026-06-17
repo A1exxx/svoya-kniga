@@ -1,14 +1,67 @@
 import { useState } from 'react'
-import { useOrg, type Org } from '../state/orgStore'
-import { type UsnObject } from '../lib/taxcore'
+import { useNavigate } from 'react-router-dom'
+import { useOrg, type Org, type OrgVatMode } from '../state/orgStore'
+import { type UsnObject, calcVatUsn, getParams } from '../lib/taxcore'
 import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
+import { isPlaceholderName, orgDisplayName, requisitesProgress } from '../lib/orgDisplay'
 import { Card, Field, Note, inputClass } from '../components/ui'
+
+/** Выбор ставки НДС — применяется сквозь всё приложение (счета, декларация, книга продаж). */
+function VatRateSelect({ o, onChange }: { o: Org; onChange: (m: OrgVatMode) => void }) {
+  const generalRate = getParams(o.year).vat_general_rate.toNumber()
+  const options: { value: OrgVatMode; label: string }[] = [
+    { value: 'auto', label: 'Авто (по доходу)' },
+    { value: 'none', label: 'Освобождение / без НДС' },
+    { value: 'rate5', label: '5% (без вычета)' },
+    { value: 'rate7', label: '7% (без вычета)' },
+    { value: 'rate10', label: '10% (льготные товары)' },
+    { value: 'general', label: `Общая ${generalRate}% (с вычетом)` },
+  ]
+  let recommend = ''
+  try {
+    const r = calcVatUsn(o.year, o.income, { mode: 'auto' })
+    recommend = r.exempt ? 'по доходу — освобождение' : `по доходу рекомендуется ${r.rate.toNumber()}%`
+  } catch {
+    recommend = ''
+  }
+  return (
+    <div className="ml-7 mt-1 max-w-md rounded-lg border border-line bg-slate-50/60 p-3">
+      <Field label="Ставка НДС" hint={recommend}>
+        <select
+          className={inputClass}
+          value={o.vatMode}
+          onChange={(e) => onChange(e.target.value as OrgVatMode)}
+        >
+          {options.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <p className="mt-2 text-xs text-muted">
+        Выбранная ставка подставляется в новые счета и используется в декларации по НДС и книге
+        продаж. С 2026 общая ставка — {generalRate}% (ФЗ № 425-ФЗ).
+      </p>
+    </div>
+  )
+}
 
 export function Requisites() {
   const { activeOrg, updateActiveOrg } = useOrg()
+  const navigate = useNavigate()
   const o = activeOrg
   const [busy, setBusy] = useState(false)
   const [innMsg, setInnMsg] = useState<string | null>(null)
+  const progress = requisitesProgress(o)
+
+  // Если «Краткое название» осталось плейсхолдером — подставляем «ИП {ФИО/ИНН}»,
+  // чтобы ИП был виден в списке слева. Вызывается на blur ФИО и ИНН.
+  const backfillName = () => {
+    if (!isPlaceholderName(o.name)) return
+    const auto = orgDisplayName(o)
+    if (auto !== 'Без названия' && auto !== o.name) updateActiveOrg({ name: auto })
+  }
 
   const onLookup = async () => {
     if (!isValidInnLength(o.inn)) {
@@ -33,7 +86,7 @@ export function Requisites() {
     }
     if (info.type === 'ip') {
       patch.fio = info.name
-      if (!o.name) patch.name = info.name
+      if (isPlaceholderName(o.name)) patch.name = info.name
     } else {
       patch.name = info.name
     }
@@ -48,13 +101,20 @@ export function Requisites() {
     reader.readAsDataURL(file)
   }
 
-  const text = (key: keyof typeof o, label: string, placeholder = '', hint?: string) => (
+  const text = (
+    key: keyof typeof o,
+    label: string,
+    placeholder = '',
+    hint?: string,
+    onBlur?: () => void
+  ) => (
     <Field label={label} hint={hint}>
       <input
         className={inputClass}
         placeholder={placeholder}
         value={(o[key] as string) ?? ''}
         onChange={(e) => updateActiveOrg({ [key]: e.target.value } as never)}
+        onBlur={onBlur}
       />
     </Field>
   )
@@ -65,19 +125,39 @@ export function Requisites() {
         <div>
           <h1 className="text-2xl font-semibold text-ink">Реквизиты</h1>
           <p className="mt-1 text-sm text-muted">
-            Данные ИП, банк и система налогообложения. Сохраняются автоматически и используются в
-            расчётах и документах. Переключить или добавить ИП можно слева внизу.
+            Данные ИП, банк и система налогообложения. Используются в расчётах и документах.
+            Переключить или добавить ИП можно слева внизу.
           </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="inline-flex items-center gap-1 rounded-full bg-ok/10 px-2 py-0.5 font-medium text-ok">
+              Сохранено ✓ <span className="font-normal text-muted">— изменения сохраняются автоматически</span>
+            </span>
+            <span className={progress.missing.length ? 'text-warn' : 'text-ok'}>
+              Заполнено {progress.filled} из {progress.total}
+              {progress.missing.length > 0 && (
+                <span className="text-muted"> · не хватает: {progress.missing.join(', ')}</span>
+              )}
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <button
-            type="button"
-            onClick={onLookup}
-            disabled={busy}
-            className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
-          >
-            {busy ? 'Поиск…' : 'Заполнить по ИНН'}
-          </button>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onLookup}
+              disabled={busy}
+              className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
+            >
+              {busy ? 'Поиск…' : 'Заполнить по ИНН'}
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              className="cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            >
+              Готово
+            </button>
+          </div>
           {innMsg && <span className="max-w-[280px] text-right text-xs text-muted">{innMsg}</span>}
         </div>
       </header>
@@ -85,9 +165,9 @@ export function Requisites() {
       <div className="space-y-5">
         <Card title="Организация">
           <div className="grid gap-4 sm:grid-cols-2">
-            {text('name', 'Краткое название', 'ИП Иванов')}
-            {text('fio', 'ФИО предпринимателя', 'Иванов Иван Иванович')}
-            {text('inn', 'ИНН', '123456789012')}
+            {text('name', 'Краткое название', 'ИП Иванов', 'для списка слева; заполнится само по ФИО')}
+            {text('fio', 'ФИО предпринимателя', 'Иванов Иван Иванович', undefined, backfillName)}
+            {text('inn', 'ИНН', '123456789012', undefined, backfillName)}
             {text('ogrnip', 'ОГРНИП', '312345678901234')}
             <Field label="Дата регистрации" hint="влияет на расчёт взносов за неполный год">
               <input
@@ -98,6 +178,7 @@ export function Requisites() {
               />
             </Field>
             {text('okved', 'Основной ОКВЭД', '62.01')}
+            {text('oktmo', 'ОКТМО', '45000000', 'код территории — нужен в уведомлениях ЕНС')}
             <div className="sm:col-span-2">{text('address', 'Адрес', 'г. Москва, ...')}</div>
           </div>
         </Card>
@@ -226,6 +307,8 @@ export function Requisites() {
                 Плательщик НДС на УСН <span className="text-muted">(доход свыше порога)</span>
               </span>
             </label>
+
+            {o.vat && <VatRateSelect o={o} onChange={(vatMode) => updateActiveOrg({ vatMode })} />}
           </div>
         </Card>
 

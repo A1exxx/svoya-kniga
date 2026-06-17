@@ -41,6 +41,32 @@ export function Money() {
     else expense += o.amount
   }
 
+  // P&L: доход/расход/прибыль по всем операциям (управленческий вид), помесячно.
+  const monthly = Array.from({ length: 12 }, () => ({ inc: 0, exp: 0 }))
+  let pnlInc = 0
+  let pnlExp = 0
+  for (const o of yearOps) {
+    const m = Number(o.date.slice(5, 7)) - 1
+    if (m < 0 || m > 11) continue
+    if (o.kind === 'income') {
+      monthly[m].inc += o.amount
+      pnlInc += o.amount
+    } else {
+      monthly[m].exp += o.amount
+      pnlExp += o.amount
+    }
+  }
+  const pnlProfit = pnlInc - pnlExp
+  const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+
+  const exportPnl = () => {
+    const rows = monthly
+      .map((mm, i) => [MONTHS[i], mm.inc, mm.exp, mm.inc - mm.exp])
+      .filter((row) => Number(row[1]) !== 0 || Number(row[2]) !== 0)
+    rows.push(['Итого', pnlInc, pnlExp, pnlProfit])
+    downloadCsv(`PnL_${activeOrg.year}.csv`, ['Месяц', 'Доход', 'Расход', 'Прибыль'], rows)
+  }
+
   const add = () => {
     if (draft.amount <= 0) return
     addOp(draft)
@@ -156,6 +182,68 @@ export function Money() {
           <div className="tnum mt-1 text-2xl font-semibold text-brand-600">{yearOps.length}</div>
         </Card>
       </div>
+
+      {/* Отчёт о финансах (P&L) */}
+      <Card
+        title="Отчёт о финансах (P&L)"
+        className="mb-5"
+        right={
+          <button
+            type="button"
+            onClick={exportPnl}
+            className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            Экспорт в Excel
+          </button>
+        }
+      >
+        <div className="mb-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <div className="text-sm text-muted">Доход за год</div>
+            <div className="tnum mt-1 text-xl font-semibold text-ok">{formatRub(pnlInc)}</div>
+          </div>
+          <div>
+            <div className="text-sm text-muted">Расход за год</div>
+            <div className="tnum mt-1 text-xl font-semibold text-ink">{formatRub(pnlExp)}</div>
+          </div>
+          <div>
+            <div className="text-sm text-muted">Прибыль</div>
+            <div className={`tnum mt-1 text-xl font-semibold ${pnlProfit >= 0 ? 'text-ok' : 'text-danger'}`}>
+              {formatRub(pnlProfit)}
+            </div>
+          </div>
+        </div>
+        {yearOps.length === 0 ? (
+          <p className="text-sm text-muted">Добавьте операции — появится помесячная динамика.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-3 font-medium">Месяц</th>
+                  <th className="py-2 pr-3 text-right font-medium">Доход</th>
+                  <th className="py-2 pr-3 text-right font-medium">Расход</th>
+                  <th className="py-2 text-right font-medium">Прибыль</th>
+                </tr>
+              </thead>
+              <tbody>
+                {monthly.map((mm, i) =>
+                  mm.inc === 0 && mm.exp === 0 ? null : (
+                    <tr key={i} className="border-b border-line/60">
+                      <td className="py-2 pr-3 text-ink">{MONTHS[i]}</td>
+                      <td className="tnum py-2 pr-3 text-right text-ok">{formatRub(mm.inc)}</td>
+                      <td className="tnum py-2 pr-3 text-right">{formatRub(mm.exp)}</td>
+                      <td className={`tnum py-2 text-right ${mm.inc - mm.exp >= 0 ? 'text-ink' : 'text-danger'}`}>
+                        {formatRub(mm.inc - mm.exp)}
+                      </td>
+                    </tr>
+                  )
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* Добавить операцию */}
       <Card title="Добавить операцию" className="mb-5">

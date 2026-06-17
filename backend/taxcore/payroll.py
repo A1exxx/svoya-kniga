@@ -181,6 +181,14 @@ class SalaryMonth:
     net: Decimal
     vznosy: Decimal           # страховые взносы (единый тариф/МСП)
     travmatizm: Decimal       # взносы на травматизм
+    # Разбивка на аванс (1-я половина месяца) и окончательный расчёт.
+    # Инвариант: ndfl == advance_ndfl + settlement_ndfl (декомпозиция, не новый итог).
+    advance_gross: Decimal = Decimal("0")
+    advance_ndfl: Decimal = Decimal("0")
+    advance_net: Decimal = Decimal("0")
+    settlement_gross: Decimal = Decimal("0")
+    settlement_ndfl: Decimal = Decimal("0")
+    settlement_net: Decimal = Decimal("0")
 
 
 @dataclass
@@ -197,6 +205,8 @@ class SalaryResult:
     travmatizm_year: Decimal
     employer_cost_year: Decimal   # gross + взносы + травматизм
     child_deduction_monthly: Decimal
+    advance_ndfl_year: Decimal = Decimal("0")       # НДФЛ с авансов за год (часть ndfl_year)
+    settlement_ndfl_year: Decimal = Decimal("0")    # НДФЛ с расчётов за год (часть ndfl_year)
     notes: list[str] = field(default_factory=list)
 
 
@@ -209,14 +219,20 @@ def calc_salary(
     msp: bool = True,
     travmatizm_rate=None,
     months: int = 12,
+    advance_percent=Decimal("0"),
 ) -> SalaryResult:
     """Расчёт зарплаты сотрудника: НДФЛ (прогрессия + детские вычеты, нарастающим итогом),
     страховые взносы (с льготой МСП) и стоимость для работодателя — проекция на `months`
-    при равном окладе."""
+    при равном окладе. advance_percent (доля 0..1) — разбивка на аванс/расчёт."""
     p = get_payroll(year)
     gross = to_decimal(monthly_gross)
     if gross < 0:
         raise ValueError("Оклад не может быть отрицательным")
+    advance_share = to_decimal(advance_percent)
+    if advance_share < 0:
+        advance_share = Decimal("0")
+    if advance_share > 1:
+        advance_share = Decimal("1")
     travm_rate = p.travmatizm_default if travmatizm_rate is None else to_decimal(travmatizm_rate)
     ded_month = child_deduction_monthly(year, children, disabled_children, single_parent)
     msp_threshold = p.mrot * p.msp_mrot_factor
@@ -231,6 +247,7 @@ def calc_salary(
         notes.append(f"Зарплатные параметры {year} года не сверены — проверить.")
 
     for m in range(1, months + 1):
+        cum_ndfl_before = cum_ndfl
         cum_income += gross
         # Вычет применяется, пока доход нарастающим итогом не превысил предел.
         ded_applied = ded_month if cum_income <= p.deduction_income_limit else Decimal("0")
@@ -239,11 +256,29 @@ def calc_salary(
         if taxable_cum < 0:
             taxable_cum = Decimal("0")
         ndfl_cum = ndfl_progressive(taxable_cum)
-        ndfl_month = ndfl_cum - cum_ndfl
+        ndfl_month = ndfl_cum - cum_ndfl_before
         if ndfl_month < 0:
             ndfl_month = Decimal("0")
         cum_ndfl = ndfl_cum
         net = money(gross - ndfl_month)
+
+        # Разбивка на аванс/расчёт. Детский вычет применяется на этапе расчёта (как в 1С),
+        # поэтому база НДФЛ с аванса = доход до месяца + аванс − вычеты до месяца.
+        advance_gross = money(gross * advance_share)
+        income_before = cum_income - gross
+        ded_before = cum_deductions - ded_applied
+        advance_base_cum = income_before + advance_gross - ded_before
+        if advance_base_cum < 0:
+            advance_base_cum = Decimal("0")
+        advance_ndfl = ndfl_progressive(advance_base_cum) - cum_ndfl_before
+        if advance_ndfl < 0:
+            advance_ndfl = Decimal("0")
+        if advance_ndfl > ndfl_month:
+            advance_ndfl = ndfl_month
+        advance_net = money(advance_gross - advance_ndfl)
+        settlement_gross = money(gross - advance_gross)
+        settlement_ndfl = ndfl_month - advance_ndfl
+        settlement_net = money(settlement_gross - settlement_ndfl)
 
         # Страховые взносы
         if msp:
@@ -273,6 +308,12 @@ def calc_salary(
                 net=net,
                 vznosy=money(vznosy),
                 travmatizm=money(travmatizm),
+                advance_gross=money(advance_gross),
+                advance_ndfl=money(advance_ndfl),
+                advance_net=advance_net,
+                settlement_gross=money(settlement_gross),
+                settlement_ndfl=money(settlement_ndfl),
+                settlement_net=settlement_net,
             )
         )
 
@@ -281,6 +322,8 @@ def calc_salary(
     net_year = money(sum((r.net for r in rows), Decimal("0")))
     vznosy_year = money(sum((r.vznosy for r in rows), Decimal("0")))
     travm_year = money(sum((r.travmatizm for r in rows), Decimal("0")))
+    advance_ndfl_year = money(sum((r.advance_ndfl for r in rows), Decimal("0")))
+    settlement_ndfl_year = money(sum((r.settlement_ndfl for r in rows), Decimal("0")))
 
     return SalaryResult(
         year=year,
@@ -294,6 +337,8 @@ def calc_salary(
         travmatizm_year=travm_year,
         employer_cost_year=money(gross_year + vznosy_year + travm_year),
         child_deduction_monthly=ded_month,
+        advance_ndfl_year=advance_ndfl_year,
+        settlement_ndfl_year=settlement_ndfl_year,
         notes=notes,
     )
 

@@ -18,11 +18,19 @@ import type { ContributionsResult } from './vznosy.js';
 export interface CalendarEvent {
   /** Дата события (YYYY-MM-DD), уже перенесена с выходных */
   due: string;
+  /** Начало окна оплаты/сдачи (для задач вида «с X по Y»), опционально */
+  windowStart?: string;
   /** Тип события */
   kind: 'payment' | 'report' | 'notification';
   title: string;
   amount: Decimal | null;
   note: string;
+}
+
+/** Доп. параметры календаря: наличие сотрудников и плательщик НДС → доп. сроки. */
+export interface CalendarOptions {
+  hasEmployees?: boolean;
+  vat?: boolean;
 }
 
 /**
@@ -34,7 +42,8 @@ export interface CalendarEvent {
 export function usnCalendar(
   taxYear: number,
   usn?: UsnYearResult,
-  contributions?: ContributionsResult
+  contributions?: ContributionsResult,
+  opts: CalendarOptions = {}
 ): CalendarEvent[] {
   // Квартальные авансы заполняются ТОЛЬКО при полном поквартальном расчёте (ровно 4 периода).
   // При usn_quick (1 период «год») оставляем null — защита от двойного счёта годового налога.
@@ -53,10 +62,12 @@ export function usnCalendar(
     kind: CalendarEvent['kind'],
     title: string,
     amount: Decimal | null = null,
-    note = ''
+    note = '',
+    windowStart?: Date
   ): CalendarEvent {
     return {
       due: dateToIso(shiftToWorkday(rawDate)),
+      windowStart: windowStart ? dateToIso(windowStart) : undefined,
       kind,
       title,
       amount,
@@ -105,7 +116,9 @@ export function usnCalendar(
       makeDate(taxYear, 12, 28),
       'payment',
       'Фиксированные страховые взносы ИП',
-      contributions?.fixed ?? null
+      contributions?.fixed ?? null,
+      'можно платить частями в течение года',
+      makeDate(taxYear, 12, 1)
     ),
     makeEvent(
       makeDate(taxYear + 1, 4, 25),
@@ -127,6 +140,23 @@ export function usnCalendar(
       contributions?.one_percent ?? null
     ),
   ];
+
+  // Отчётность за сотрудников (когда есть штат).
+  if (opts.hasEmployees) {
+    events.push(
+      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'РСВ за год', null, 'Расчёт по страховым взносам, в ФНС'),
+      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'ЕФС-1 за год', null, 'в СФР'),
+      makeEvent(makeDate(taxYear + 1, 2, 25), 'report', '6-НДФЛ за год', null, 'в ФНС'),
+    );
+  }
+
+  // НДС поквартально (когда плательщик НДС).
+  if (opts.vat) {
+    events.push(
+      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'Декларация по НДС за 4 квартал', null, 'поквартально, через оператора ЭДО'),
+      makeEvent(makeDate(taxYear + 1, 1, 28), 'payment', 'Уплата НДС за 4 квартал', null, 'НДС платится поквартально до 28 числа'),
+    );
+  }
 
   // Если по итогам года образовалась переплата — отдельным информационным событием.
   if (usn != null && usn.year_overpayment != null && usn.year_overpayment.gt(0)) {

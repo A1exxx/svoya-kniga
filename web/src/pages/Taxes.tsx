@@ -31,7 +31,7 @@ export function Taxes() {
   const o = activeOrg
   const [modal, setModal] = useState<'decl' | 'ens' | 'send' | null>(null)
   const [sendTitle, setSendTitle] = useState('Декларация по УСН')
-  const [vatMode, setVatMode] = useState<VatMode>('auto')
+  const [vatMode, setVatMode] = useState<VatMode>(activeOrg.vatMode)
 
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
@@ -293,7 +293,8 @@ export function Taxes() {
                       ['none', 'Без НДС'],
                       ['rate5', '5%'],
                       ['rate7', '7%'],
-                      ['general20', '20%'],
+                      ['rate10', '10%'],
+                      ['general', `${params ? params.vat_general_rate.toNumber() : 22}%`],
                     ] as [VatMode, string][]
                   ).map(([val, label]) => (
                     <button
@@ -317,8 +318,8 @@ export function Taxes() {
                   </Note>
                 ) : vatRes && vatRes.exempt ? (
                   <Note>
-                    Освобождён от НДС: годовой доход {formatRub(vatIncome)} ≤ 60 млн ₽ (ст. 145 НК РФ).
-                    Большинству ИП на УСН НДС платить не нужно.
+                    Освобождён от НДС: годовой доход {formatRub(vatIncome)} ≤{' '}
+                    {params ? formatRub(params.vat_exempt_threshold.toNumber()) : '60 млн'} (ст. 145 НК РФ).
                   </Note>
                 ) : vatRes ? (
                   <>
@@ -333,9 +334,11 @@ export function Taxes() {
                   </>
                 ) : null}
                 <p className="mt-3 text-xs text-muted">
-                  С 2025 ИП на УСН платят НДС при доходе свыше 60 млн ₽/год: спец-ставки 5%
-                  (60–250 млн) и 7% (250–450 млн) без вычета входящего, либо общая 20% с вычетом.
-                  Доход берётся из расчёта выше; режим «Авто» подбирает ставку по порогу.
+                  ИП на УСН платят НДС при доходе свыше порога освобождения (
+                  {params ? formatRub(params.vat_exempt_threshold.toNumber()) : '60 млн'}/год): спец-ставки
+                  5% и 7% без вычета входящего, либо общая{' '}
+                  {params ? params.vat_general_rate.toNumber() : 22}% с вычетом. С 2026 общая ставка 22%,
+                  порог снижен до 20 млн ₽ (ФЗ № 425-ФЗ). Ставка по умолчанию берётся из «Реквизитов».
                 </p>
               </Card>
 

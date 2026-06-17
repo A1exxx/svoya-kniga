@@ -1,6 +1,13 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_YEAR, type UsnObject } from '../lib/taxcore'
 
+/**
+ * Выбранный режим НДС для ИП на УСН. `auto` — определять по доходу (как раньше);
+ * остальные — явный выбор бухгалтера, который применяется сквозь всё приложение
+ * (счета, декларация НДС, книга продаж). `general` = общая ставка года (20% до 2026, 22% с 2026).
+ */
+export type OrgVatMode = 'auto' | 'none' | 'rate5' | 'rate7' | 'rate10' | 'general'
+
 /** Организация (ИП): реквизиты + система налогообложения + рабочие финансы. */
 export interface Org {
   id: string
@@ -12,6 +19,7 @@ export interface Org {
   regDate: string // YYYY-MM-DD
   address: string
   okved: string
+  oktmo: string // код ОКТМО — нужен в уведомлениях ЕНС / КНД 1110355
   // Банк
   bankAccount: string
   bik: string
@@ -25,6 +33,7 @@ export interface Org {
   regionalRate: number | null // ставка в %, null = базовая из параметров
   hasEmployees: boolean
   vat: boolean
+  vatMode: OrgVatMode // выбранная ставка/режим НДС (применяется в счетах и декларации)
   // Рабочие финансы (для расчёта)
   year: number
   income: number
@@ -49,6 +58,7 @@ function demoOrg(): Org {
     regDate: '',
     address: '',
     okved: '',
+    oktmo: '',
     bankAccount: '',
     bik: '',
     bankName: '',
@@ -56,6 +66,7 @@ function demoOrg(): Org {
     regionalRate: null,
     hasEmployees: false,
     vat: false,
+    vatMode: 'auto',
     year: DEFAULT_YEAR,
     income: 2_400_000,
     expenses: 0,
@@ -84,8 +95,11 @@ function load(): Persisted {
     if (raw) {
       const p = JSON.parse(raw) as Persisted
       if (p.orgs?.length) {
-        const activeOrgId = p.orgs.some((o) => o.id === p.activeOrgId) ? p.activeOrgId : p.orgs[0].id
-        return { orgs: p.orgs, activeOrgId }
+        // Бэкфилл новых полей (oktmo, vatMode и т.п.) для ранее сохранённых ИП.
+        const base = demoOrg()
+        const orgs = p.orgs.map((o) => ({ ...base, ...o }))
+        const activeOrgId = orgs.some((o) => o.id === p.activeOrgId) ? p.activeOrgId : orgs[0].id
+        return { orgs, activeOrgId }
       }
     }
   } catch {

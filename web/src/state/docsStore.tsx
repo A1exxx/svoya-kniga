@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { useOrg } from './orgStore'
+import { useOrg, type Org } from './orgStore'
+import { calcVatUsn, getParams } from '../lib/taxcore'
 
 export interface DocItem {
   name: string
@@ -8,8 +9,10 @@ export interface DocItem {
 }
 
 export type DocType = 'invoice' | 'act' | 'waybill' | 'upd' | 'contract'
-export type VatMode = 'none' | '5' | '7' | '10' | '20'
+export type VatMode = 'none' | '5' | '7' | '10' | '20' | '22'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
+/** Направление: исходящие (мы выставляем) или входящие (получены от поставщиков). */
+export type DocDirection = 'outgoing' | 'incoming'
 
 export const DOC_TYPE_LABEL: Record<DocType, string> = {
   invoice: 'Счёт',
@@ -19,15 +22,29 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   contract: 'Договор',
 }
 
+/** Вид договора (для печатной формы). */
+export type ContractKind = 'services' | 'supply' | 'work' | 'rent' | 'nda' | 'offer'
+
+export const CONTRACT_KIND_LABEL: Record<ContractKind, string> = {
+  services: 'Возмездного оказания услуг',
+  supply: 'Поставки',
+  work: 'Подряда',
+  rent: 'Аренды',
+  nda: 'О неразглашении (NDA)',
+  offer: 'Публичная оферта',
+}
+
 export interface Doc {
   id: string
   type: DocType
+  direction: DocDirection
   number: string
   date: string // YYYY-MM-DD
-  buyer: string
-  buyerDetails: string // ИНН/адрес покупателя (свободный текст)
+  buyer: string // для входящих — поставщик («от кого»)
+  buyerDetails: string // ИНН/адрес контрагента (свободный текст)
   items: DocItem[]
   vatMode: VatMode
+  contractKind?: ContractKind // только для type === 'contract'
   note: string
   paymentStatus: PaymentStatus
   paidDate?: string // YYYY-MM-DD
@@ -36,6 +53,33 @@ export interface Doc {
 
 const KEY = 'svoyakniga.docs.v1'
 type Store = Record<string, Doc[]>
+
+/** Ставка НДС по умолчанию для нового счёта — из выбранного режима НДС организации. */
+export function defaultDocVatMode(org: Org): VatMode {
+  if (!org.vat) return 'none'
+  switch (org.vatMode) {
+    case 'rate5':
+      return '5'
+    case 'rate7':
+      return '7'
+    case 'rate10':
+      return '10'
+    case 'general':
+      return String(getParams(org.year).vat_general_rate.toNumber()) as VatMode
+    case 'none':
+      return 'none'
+    case 'auto':
+    default:
+      try {
+        const r = calcVatUsn(org.year, org.income, { mode: 'auto' })
+        if (r.exempt) return 'none'
+        const n = r.rate.toNumber()
+        return (n > 0 ? String(n) : 'none') as VatMode
+      } catch {
+        return 'none'
+      }
+  }
+}
 
 function makeId(): string {
   try {
@@ -47,7 +91,12 @@ function makeId(): string {
 
 function load(): Store {
   try {
-    return (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
+    const raw = (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
+    // Миграция: старые документы без направления считаем исходящими.
+    for (const k of Object.keys(raw)) {
+      raw[k] = (raw[k] ?? []).map((d) => ({ ...d, direction: d.direction ?? 'outgoing' }))
+    }
+    return raw
   } catch {
     return {}
   }
@@ -55,7 +104,7 @@ function load(): Store {
 
 interface DocsCtxValue {
   docs: Doc[]
-  addDoc: (type: DocType) => string
+  addDoc: (type: DocType, direction?: DocDirection) => string
   updateDoc: (id: string, patch: Partial<Doc>) => void
   removeDoc: (id: string) => void
 }
@@ -63,7 +112,7 @@ interface DocsCtxValue {
 const DocsCtx = createContext<DocsCtxValue | null>(null)
 
 export function DocsProvider({ children }: { children: ReactNode }) {
-  const { activeOrgId } = useOrg()
+  const { activeOrgId, activeOrg } = useOrg()
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
@@ -76,19 +125,23 @@ export function DocsProvider({ children }: { children: ReactNode }) {
 
   const docs = store[activeOrgId] ?? []
 
-  const addDoc = (type: DocType): string => {
+  const addDoc = (type: DocType, direction: DocDirection = 'outgoing'): string => {
     const id = makeId()
     const list = store[activeOrgId] ?? []
-    const nextNumber = String(list.filter((d) => d.type === type).length + 1)
+    const nextNumber = String(
+      list.filter((d) => d.type === type && d.direction === direction).length + 1
+    )
     const doc: Doc = {
       id,
       type,
+      direction,
       number: nextNumber,
       date: new Date().toISOString().slice(0, 10),
       buyer: '',
       buyerDetails: '',
       items: [{ name: '', qty: 1, price: 0 }],
-      vatMode: 'none',
+      // Для входящих ставку НДС вводит поставщик (по умолчанию без НДС); для исходящих — из реквизитов.
+      vatMode: direction === 'incoming' ? 'none' : defaultDocVatMode(activeOrg),
       note: '',
       paymentStatus: 'unpaid',
     }

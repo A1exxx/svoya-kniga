@@ -7,6 +7,8 @@
  * попробовать сразу.
  */
 
+export type InnStatus = 'active' | 'liquidating' | 'liquidated' | 'bankrupt' | 'reorganizing'
+
 export interface InnInfo {
   inn: string
   type: 'ul' | 'ip'
@@ -14,6 +16,34 @@ export interface InnInfo {
   kpp?: string
   address?: string
   ogrn?: string
+  status?: InnStatus
+  regDate?: string // YYYY-MM-DD
+}
+
+/** Подпись и «светофор» статуса контрагента. */
+export function innStatusInfo(status?: InnStatus): { label: string; tone: 'ok' | 'warn' | 'danger' } {
+  switch (status) {
+    case 'active':
+      return { label: 'Действующий', tone: 'ok' }
+    case 'reorganizing':
+      return { label: 'В процессе реорганизации', tone: 'warn' }
+    case 'liquidating':
+      return { label: 'В процессе ликвидации', tone: 'warn' }
+    case 'bankrupt':
+      return { label: 'Банкротство', tone: 'danger' }
+    case 'liquidated':
+      return { label: 'Ликвидирован', tone: 'danger' }
+    default:
+      return { label: 'Статус неизвестен', tone: 'warn' }
+  }
+}
+
+const STATUS_MAP: Record<string, InnStatus> = {
+  ACTIVE: 'active',
+  LIQUIDATING: 'liquidating',
+  LIQUIDATED: 'liquidated',
+  BANKRUPT: 'bankrupt',
+  REORGANIZING: 'reorganizing',
 }
 
 const TOKEN_KEY = 'svoyakniga.dadata.token'
@@ -90,7 +120,7 @@ export async function lookupInn(inn: string): Promise<InnInfo | null> {
   const clean = inn.replace(/\D/g, '')
   if (!isValidInnLength(clean)) return null
 
-  if (DEMO[clean]) return DEMO[clean]
+  if (DEMO[clean]) return { status: 'active', ...DEMO[clean] }
 
   const token = getDadataToken()
   if (!token) return null
@@ -113,6 +143,14 @@ export async function lookupInn(inn: string): Promise<InnInfo | null> {
     const s = json?.suggestions?.[0]
     if (!s) return null
     const d = s.data || {}
+    let regDate: string | undefined
+    if (d.state?.registration_date) {
+      try {
+        regDate = new Date(d.state.registration_date).toISOString().slice(0, 10)
+      } catch {
+        /* ignore */
+      }
+    }
     return {
       inn: d.inn || clean,
       type: d.type === 'INDIVIDUAL' ? 'ip' : 'ul',
@@ -120,6 +158,8 @@ export async function lookupInn(inn: string): Promise<InnInfo | null> {
       kpp: d.kpp || undefined,
       ogrn: d.ogrn || undefined,
       address: d.address?.value || undefined,
+      status: d.state?.status ? STATUS_MAP[d.state.status] : undefined,
+      regDate,
     }
   } catch {
     return null

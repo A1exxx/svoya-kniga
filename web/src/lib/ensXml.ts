@@ -37,12 +37,16 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
     ? [{ period: '34/03', sum: rub(computed.usn.tax_year_final) }]
     : adv.map((a) => ({ period: a.period, sum: rub(a.amount) }))
 
+  const oktmo = org.oktmo || '00000000'
   const obXml = obligations
     .map(
       (o) =>
-        `      <СведОбяз КБК="${kbk}" ОКТМО="00000000" Период="${o.period}" ОтчетГод="${org.year}" Сумма="${o.sum}"/>`
+        `      <СведОбяз КБК="${kbk}" ОКТМО="${esc(oktmo)}" Период="${o.period}" ОтчетГод="${org.year}" Сумма="${o.sum}"/>`
     )
     .join('\n')
+  const annualNote = annualOnly
+    ? '\n  <!-- Годовой режим: суммы авансов поквартально не разнесены. Годовой налог УСН подаётся декларацией, не уведомлением. -->'
+    : ''
 
   let guid = 'DEMO0000-0000-0000-0000-000000000000'
   try {
@@ -55,7 +59,7 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<!-- ДЕМО-генерация формата ФНС. Перед отправкой сверить с XSD на format.nalog.ru. -->`,
     `<Файл ИдФайл="UT_UVNALOG_0000_0000_${esc(org.inn || '000000000000')}_${guid}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
-    `  <Документ КНД="1110355" ДатаДок="${esc(dateDoc)}" КодНО="0000">`,
+    `  <Документ КНД="1110355" ДатаДок="${esc(dateDoc)}" КодНО="0000">${annualNote}`,
     `    <СвНП>`,
     `      <НПФЛ ИННФЛ="${esc(org.inn || '')}">`,
     `        <ФИО Фамилия="${esc(fam)}" Имя="${esc(nam)}"${otch ? ` Отчество="${esc(otch)}"` : ''}/>`,

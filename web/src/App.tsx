@@ -11,6 +11,10 @@ import { Contractors } from './pages/Contractors'
 import { Goods } from './pages/Goods'
 import { Reports } from './pages/Reports'
 import { Patent } from './pages/Patent'
+import { Archive } from './pages/Archive'
+import { TaxOffice } from './pages/TaxOffice'
+import { UsefulDocs } from './pages/UsefulDocs'
+import { Admin } from './pages/Admin'
 
 export default function App() {
   return (
@@ -28,6 +32,10 @@ export default function App() {
           <Route path="/contractors" element={<Contractors />} />
           <Route path="/goods" element={<Goods />} />
           <Route path="/employees" element={<Employees />} />
+          <Route path="/archive" element={<Archive />} />
+          <Route path="/tax-office" element={<TaxOffice />} />
+          <Route path="/useful-docs" element={<UsefulDocs />} />
+          <Route path="/admin" element={<Admin />} />
           <Route path="*" element={<Dashboard />} />
         </Route>
       </Routes>

@@ -6,8 +6,15 @@ import {
   type ContractorType,
 } from '../state/contractorsStore'
 import { Card, Field, Note, inputClass } from '../components/ui'
-import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
+import { formatDate } from '../lib/format'
+import { getDadataToken, isValidInnLength, lookupInn, innStatusInfo } from '../lib/innLookup'
 import { IconPlus } from '../components/icons'
+
+const TONE_CLS: Record<'ok' | 'warn' | 'danger', string> = {
+  ok: 'bg-green-50 text-ok',
+  warn: 'bg-amber-50 text-warn',
+  danger: 'bg-red-50 text-danger',
+}
 
 const TYPE_OPTIONS: { value: ContractorType; label: string }[] = [
   { value: 'ul', label: 'Юр. лицо' },
@@ -48,8 +55,11 @@ export function Contractors() {
       name: info.name || selected.name,
       kpp: info.kpp || selected.kpp,
       address: info.address || selected.address,
+      status: info.status,
+      regDate: info.regDate,
+      checkedAt: new Date().toISOString().slice(0, 10),
     })
-    setInnMsg('Заполнено по ИНН ✓')
+    setInnMsg('Заполнено и проверено по ИНН ✓')
   }
 
   return (
@@ -173,6 +183,21 @@ export function Contractors() {
                 </Field>
               </div>
 
+              {selected.status && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-slate-50/60 px-3 py-2 text-sm">
+                  {(() => {
+                    const si = innStatusInfo(selected.status)
+                    return (
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${TONE_CLS[si.tone]}`}>
+                        ● {si.label}
+                      </span>
+                    )
+                  })()}
+                  {selected.regDate && <span className="text-muted">Дата регистрации: {formatDate(selected.regDate)}</span>}
+                  {selected.checkedAt && <span className="text-xs text-slate-400">проверено {formatDate(selected.checkedAt)}</span>}
+                </div>
+              )}
+
               <Field label="Адрес">
                 <input
                   className={inputClass}
@@ -201,9 +226,10 @@ export function Contractors() {
 
       <div className="mt-5">
         <Note>
-          Кнопка «Найти» рядом с ИНН подставляет наименование, КПП и адрес. Несколько ИНН работают
-          в демо-режиме; для любых — укажите бесплатный ключ DaData в «Настройках». Данные хранятся
-          локально по организации.
+          Кнопка «Найти» рядом с ИНН подставляет наименование, КПП, адрес и проверяет статус
+          контрагента (действующий / ликвидирован) с датой регистрации — «светофор» надёжности.
+          Несколько ИНН работают в демо-режиме; для любых и для актуального статуса — укажите
+          бесплатный ключ DaData в «Настройках». Данные хранятся локально по организации.
         </Note>
       </div>
     </div>

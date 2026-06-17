@@ -7,8 +7,8 @@ import type { Org } from '../state/orgStore'
 function makeOrg(patch: Partial<Org> = {}): Org {
   return {
     id: 'test', name: 'ИП Тест', inn: '', ogrnip: '', fio: '', regDate: '', address: '', okved: '',
-    bankAccount: '', bik: '', bankName: '', usnObject: 'income', regionalRate: null,
-    hasEmployees: false, vat: false, year: 2026, income: 0, expenses: 0, ...patch,
+    oktmo: '', bankAccount: '', bik: '', bankName: '', usnObject: 'income', regionalRate: null,
+    hasEmployees: false, vat: false, vatMode: 'auto', year: 2026, income: 0, expenses: 0, ...patch,
   }
 }
 

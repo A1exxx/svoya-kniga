@@ -8,9 +8,29 @@
  * из операций не накапливали float-погрешность и не сбивали округление налога.
  */
 import Decimal from 'decimal.js'
-import { calcContributions, usnCalendar, usnQuick, calcUsn, toDecimal, type PeriodData } from './taxcore'
+import {
+  calcContributions,
+  usnCalendar,
+  usnQuick,
+  calcUsn,
+  calcVatUsn,
+  toDecimal,
+  type PeriodData,
+  type VatResult,
+  type DecimalLike,
+} from './taxcore'
 import type { Org } from '../state/orgStore'
 import type { Operation } from '../state/opsStore'
+
+/** НДС по выбранному режиму организации (null, если не плательщик). */
+function computeVat(org: Org, income: DecimalLike): VatResult | null {
+  if (!org.vat) return null
+  try {
+    return calcVatUsn(org.year, income, { mode: org.vatMode })
+  } catch {
+    return null
+  }
+}
 
 const QUARTER_LABELS = ['1 квартал', 'полугодие', '9 месяцев', 'год']
 
@@ -42,8 +62,9 @@ export function compute(org: Org, ops: Operation[] = []) {
       hasEmployees: org.hasEmployees,
       rate,
     })
-    const calendar = usnCalendar(org.year, usn, contr)
-    return { contr, usn, calendar, quarterly: false, byQuarter: [] as QuarterAgg[] }
+    const calendar = usnCalendar(org.year, usn, contr, { hasEmployees: org.hasEmployees, vat: org.vat })
+    const vat = computeVat(org, org.income)
+    return { contr, usn, calendar, vat, quarterly: false, byQuarter: [] as QuarterAgg[] }
   }
 
   // --- Поквартальный режим (есть операции): нарастающим итогом, всё в Decimal ---
@@ -76,13 +97,14 @@ export function compute(org: Org, ops: Operation[] = []) {
   }))
 
   const usn = calcUsn(org.year, org.usnObject, periods, org.hasEmployees, rate)
-  const calendar = usnCalendar(org.year, usn, contr)
+  const calendar = usnCalendar(org.year, usn, contr, { hasEmployees: org.hasEmployees, vat: org.vat })
   const byQuarter: QuarterAgg[] = [0, 1, 2, 3].map((i) => ({
     label: `${i + 1} кв`,
     income: inc[i].toNumber(),
     expense: exp[i].toNumber(),
   }))
-  return { contr, usn, calendar, quarterly: true, byQuarter }
+  const vat = computeVat(org, annualIncome)
+  return { contr, usn, calendar, vat, quarterly: true, byQuarter }
 }
 
 export type Computed = ReturnType<typeof compute>

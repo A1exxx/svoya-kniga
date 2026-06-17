@@ -1,14 +1,19 @@
 import { NavLink } from 'react-router-dom'
 import { useOrg } from '../state/orgStore'
+import { orgDisplayName, requisitesComplete } from '../lib/orgDisplay'
 import {
   IconBuilding,
+  IconAlert,
   IconCalc,
+  IconCheck,
   IconDoc,
   IconId,
+  IconInfo,
   IconPackage,
   IconPatent,
   IconPlus,
   IconReport,
+  IconSend,
   IconSettings,
   IconTasks,
   IconUsers,
@@ -18,16 +23,20 @@ import {
 /** Навигация в духе Контур.Эльбы (левое вертикальное меню). */
 export const NAV = [
   { to: '/', label: 'Задачи и отчётность', Icon: IconTasks, end: true },
+  { to: '/archive', label: 'Архив', Icon: IconCheck },
   { to: '/taxes', label: 'Налоги', Icon: IconCalc },
   { to: '/reports', label: 'Отчётность', Icon: IconReport },
+  { to: '/tax-office', label: 'Налоговая', Icon: IconSend },
   { to: '/patent', label: 'Патент', Icon: IconPatent },
   { to: '/money', label: 'Деньги', Icon: IconWallet },
   { to: '/documents', label: 'Документы', Icon: IconDoc },
+  { to: '/useful-docs', label: 'Полезные документы', Icon: IconInfo },
   { to: '/contractors', label: 'Контрагенты', Icon: IconUsers },
   { to: '/goods', label: 'Товары', Icon: IconPackage },
   { to: '/employees', label: 'Сотрудники', Icon: IconId },
   { to: '/requisites', label: 'Реквизиты', Icon: IconBuilding },
   { to: '/settings', label: 'Настройки', Icon: IconSettings },
+  { to: '/admin', label: 'Администрирование', Icon: IconAlert },
 ] as const
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
@@ -66,22 +75,46 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         })}
       </nav>
 
-      {/* Переключатель организаций (твои ИП) */}
+      {/* Переключатель организаций (твои ИП) — видимый список с подсветкой активного */}
       <div className="space-y-2 border-t border-line p-3">
-        <label className="block">
-          <span className="mb-1 block text-[11px] uppercase tracking-wide text-muted">Организация</span>
-          <select
-            className="w-full rounded-lg border border-line bg-white px-2.5 py-2 text-sm text-ink focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-            value={activeOrgId}
-            onChange={(e) => setActiveOrgId(e.target.value)}
-          >
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name || 'Без названия'}
-              </option>
-            ))}
-          </select>
-        </label>
+        <span className="block px-1 text-[11px] uppercase tracking-wide text-muted">
+          Мои ИП {orgs.length > 1 && <span className="text-slate-400">({orgs.length})</span>}
+        </span>
+        <div className="max-h-48 space-y-0.5 overflow-auto">
+          {orgs.map((o) => {
+            const active = o.id === activeOrgId
+            const complete = requisitesComplete(o)
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => {
+                  setActiveOrgId(o.id)
+                  onNavigate?.()
+                }}
+                title={complete ? 'Реквизиты заполнены' : 'Реквизиты заполнены не полностью'}
+                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                  active
+                    ? 'bg-brand-50 text-brand-600'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-ink'
+                }`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className={`block truncate text-sm ${active ? 'font-medium' : ''}`}>
+                    {orgDisplayName(o)}
+                  </span>
+                  {o.inn && <span className="block truncate text-[11px] text-muted">ИНН {o.inn}</span>}
+                </span>
+                <span
+                  className={`shrink-0 text-xs ${complete ? 'text-ok' : 'text-slate-300'}`}
+                  aria-hidden
+                >
+                  {complete ? '✓' : '•'}
+                </span>
+              </button>
+            )
+          })}
+        </div>
         <button
           type="button"
           onClick={addOrg}

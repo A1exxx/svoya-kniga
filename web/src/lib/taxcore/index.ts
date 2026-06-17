@@ -12,3 +12,5 @@ export * from './ens.js';
 export * from './payroll.js';
 export * from './vat.js';
 export * from './patent.js';
+export * from './kbk.js';
+export * from './notifications.js';

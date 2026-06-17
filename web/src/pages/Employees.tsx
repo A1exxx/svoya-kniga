@@ -1,18 +1,36 @@
 import { useState } from 'react'
 import { useOrg, type Org } from '../state/orgStore'
-import { useEmployees } from '../state/employeesStore'
+import { useEmployees, type Employee } from '../state/employeesStore'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation } from '../lib/taxcore'
 import { formatRub } from '../lib/format'
+import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
+import { sickBases, vacationBase12m } from '../lib/earnings'
+import { payrollSummary, employeeSalaryOptions } from '../lib/payrollSummary'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { SendDemoModal } from '../components/SendDemoModal'
 import { PayrollReportDoc, REPORT_TITLE, type ReportType } from '../components/PayrollReportDoc'
+import { PayrollStatementDoc } from '../components/PayrollStatementDoc'
+import { EmployeeDoc, EMPLOYEE_DOC_TITLE, type EmployeeDocType } from '../components/employee/EmployeeDocs'
 
 const dec = (d: { toNumber: () => number } | null | undefined) =>
   formatRub(d == null ? null : d.toNumber())
 
 const pct = (d: { toNumber: () => number }) => `${Math.round(d.toNumber() * 100)}%`
+
+const MONTH_NAMES = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+]
+const daysInMonth = (year: number, month1: number) => new Date(year, month1, 0).getDate()
+
+/** Эффективный страховой стаж: авто из даты приёма, иначе ручное значение. */
+function effectiveStazhYears(e: Employee): number {
+  if (e.stazhMode === 'manual') return e.stazhYears
+  const auto = stazhYearsFromHire(e.hireDate, undefined, e.stazhPriorMonths)
+  return auto ?? e.stazhYears
+}
 
 const TABS = [
   { key: 'staff', label: 'Штат' },
@@ -20,6 +38,7 @@ const TABS = [
   { key: 'vacation', label: 'Отпускные' },
   { key: 'sick', label: 'Больничные' },
   { key: 'alimony', label: 'Алименты' },
+  { key: 'summary', label: 'Сводка по штату' },
   { key: 'reports', label: 'Отчёты' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
@@ -37,22 +56,64 @@ function numInput(value: number, onChange: (n: number) => void, props: Record<st
   )
 }
 
-// ---- Штат (список сотрудников с сохранением) ----
+/** Выбор сотрудника для калькулятора — при выборе поля префиллятся его данными. */
+function EmployeePicker({
+  employees,
+  value,
+  onPick,
+}: {
+  employees: Employee[]
+  value: string
+  onPick: (e: Employee | null) => void
+}) {
+  if (employees.length === 0) {
+    return <Note>Добавьте сотрудников во вкладке «Штат», чтобы выбирать их здесь.</Note>
+  }
+  return (
+    <Field label="Сотрудник" hint="выберите — поля заполнятся по нему; можно поправить вручную">
+      <select
+        className={inputClass}
+        value={value}
+        onChange={(ev) => onPick(employees.find((e) => e.id === ev.target.value) ?? null)}
+      >
+        <option value="">— ввести вручную —</option>
+        {employees.map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.fio || 'Без имени'}
+            {e.dismissalDate ? ' (уволен)' : ''}
+          </option>
+        ))}
+      </select>
+    </Field>
+  )
+}
+
+// ---- Штат (карточка сотрудника = единый источник) ----
 function StaffRoster({ year }: { year: number }) {
+  const { activeOrg } = useOrg()
   const { employees, addEmployee, updateEmployee, removeEmployee } = useEmployees()
   const [selectedId, setSelectedId] = useState<string | null>(employees[0]?.id ?? null)
+  const [docType, setDocType] = useState<EmployeeDocType | null>(null)
   const selected = employees.find((e) => e.id === selectedId) ?? null
   const create = () => setSelectedId(addEmployee())
+  const up = (patch: Partial<Employee>) => selected && updateEmployee(selected.id, patch)
 
   let calc: ReturnType<typeof calcSalary> | null = null
   if (selected) {
     try {
-      calc = calcSalary(year, selected.salary, { children: selected.children, msp: selected.msp })
+      calc = calcSalary(year, selected.salary, employeeSalaryOptions(selected))
     } catch {
       calc = null
     }
   }
   const m = calc?.months[0]
+  const hasAdvance = !!selected && (selected.advancePercent ?? 0) > 0
+
+  const earningsYears: number[] = []
+  if (selected) {
+    const startY = selected.hireDate ? Number(selected.hireDate.slice(0, 4)) : year - 4
+    for (let y = Math.min(startY, year); y <= year; y++) earningsYears.push(y)
+  }
 
   return (
     <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
@@ -81,7 +142,12 @@ function StaffRoster({ year }: { year: number }) {
                   e.id === selectedId ? 'border-brand-500 bg-brand-50' : 'border-line hover:bg-slate-50'
                 }`}
               >
-                <div className="font-medium text-ink">{e.fio || 'Без имени'}</div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium text-ink">{e.fio || 'Без имени'}</span>
+                  {e.dismissalDate && (
+                    <span className="rounded bg-slate-100 px-1 text-[10px] text-slate-500">уволен</span>
+                  )}
+                </div>
                 <div className="text-xs text-muted">
                   {e.position || 'должность не указана'} · {formatRub(e.salary)}/мес
                 </div>
@@ -115,7 +181,7 @@ function StaffRoster({ year }: { year: number }) {
                     className={inputClass}
                     placeholder="Иванов Иван Иванович"
                     value={selected.fio}
-                    onChange={(e) => updateEmployee(selected.id, { fio: e.target.value })}
+                    onChange={(e) => up({ fio: e.target.value })}
                   />
                 </Field>
                 <Field label="Должность">
@@ -123,48 +189,203 @@ function StaffRoster({ year }: { year: number }) {
                     className={inputClass}
                     placeholder="Менеджер"
                     value={selected.position}
-                    onChange={(e) => updateEmployee(selected.id, { position: e.target.value })}
+                    onChange={(e) => up({ position: e.target.value })}
                   />
                 </Field>
               </div>
               <div className="grid gap-3 sm:grid-cols-3">
                 <Field label="Оклад в месяц, ₽">
-                  {numInput(selected.salary, (n) => updateEmployee(selected.id, { salary: n }))}
+                  {numInput(selected.salary, (n) => up({ salary: n }))}
                 </Field>
                 <Field label="Детей (вычет)">
-                  {numInput(selected.children, (n) => updateEmployee(selected.id, { children: n }), { max: 10 })}
-                </Field>
-                <Field label="Стаж, лет">
-                  {numInput(selected.stazhYears, (n) => updateEmployee(selected.id, { stazhYears: n }), { max: 60 })}
-                </Field>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Дата приёма">
-                  <input
-                    type="date"
-                    className={inputClass}
-                    value={selected.hireDate}
-                    onChange={(e) => updateEmployee(selected.id, { hireDate: e.target.value })}
-                  />
+                  {numInput(selected.children, (n) => up({ children: n }), { max: 10 })}
                 </Field>
                 <label className="flex cursor-pointer items-center gap-2.5 self-end pb-2.5">
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-line text-brand-600"
                     checked={selected.msp}
-                    onChange={(e) => updateEmployee(selected.id, { msp: e.target.checked })}
+                    onChange={(e) => up({ msp: e.target.checked })}
                   />
-                  <span className="text-sm text-ink">ИП в реестре МСП (льгота по взносам)</span>
+                  <span className="text-sm text-ink">МСП (льгота)</span>
                 </label>
               </div>
             </div>
           </Card>
 
+          {/* Трудовая: приём, стаж, увольнение */}
+          <Card title="Трудовая деятельность и стаж">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Дата приёма">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={selected.hireDate}
+                  onChange={(e) => up({ hireDate: e.target.value })}
+                />
+              </Field>
+              <Field label="Стаж">
+                <div className="flex gap-2">
+                  <select
+                    className={`${inputClass} max-w-[130px]`}
+                    value={selected.stazhMode ?? 'auto'}
+                    onChange={(e) => up({ stazhMode: e.target.value as 'auto' | 'manual' })}
+                  >
+                    <option value="auto">Авто из даты</option>
+                    <option value="manual">Вручную</option>
+                  </select>
+                  {(selected.stazhMode ?? 'auto') === 'manual' ? (
+                    numInput(selected.stazhYears, (n) => up({ stazhYears: n }), { max: 60 })
+                  ) : (
+                    <div className="flex-1 self-center text-sm text-ink">
+                      {selected.hireDate
+                        ? formatStazh(computeStazh(selected.hireDate, undefined, selected.stazhPriorMonths))
+                        : 'укажите дату приёма'}
+                    </div>
+                  )}
+                </div>
+              </Field>
+              {(selected.stazhMode ?? 'auto') === 'auto' && (
+                <Field label="Прежний стаж, мес" hint="добавляется к авто-стажу">
+                  {numInput(selected.stazhPriorMonths ?? 0, (n) => up({ stazhPriorMonths: n }), { max: 720 })}
+                </Field>
+              )}
+              <Field label="Дата увольнения">
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={selected.dismissalDate ?? ''}
+                    onChange={(e) => up({ dismissalDate: e.target.value || undefined })}
+                  />
+                  {selected.dismissalDate ? (
+                    <button
+                      type="button"
+                      onClick={() => up({ dismissalDate: undefined })}
+                      className="shrink-0 rounded-lg border border-line px-3 text-xs text-muted hover:text-ink"
+                    >
+                      Вернуть
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => up({ dismissalDate: new Date().toISOString().slice(0, 10) })}
+                      className="shrink-0 rounded-lg border border-line px-3 text-xs text-muted hover:border-danger hover:text-danger"
+                    >
+                      Уволить
+                    </button>
+                  )}
+                </div>
+              </Field>
+            </div>
+          </Card>
+
+          {/* Аванс */}
+          <Card title="Аванс">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="День аванса (1–31)">
+                {numInput(selected.advanceDay ?? 25, (n) => up({ advanceDay: Math.min(31, n) }), { max: 31 })}
+              </Field>
+              <Field label="Аванс, % от оклада" hint="0 = без разбивки на аванс/расчёт">
+                {numInput(selected.advancePercent ?? 0, (n) => up({ advancePercent: Math.min(100, n) }), { max: 100 })}
+              </Field>
+            </div>
+          </Card>
+
+          {/* Заработок по годам */}
+          <Card title="Заработок по годам" >
+            <p className="mb-3 text-xs text-muted">
+              Для баз отпускных и больничных (берётся заработок за прошлые годы).
+            </p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {earningsYears.map((y) => (
+                <Field key={y} label={`${y} год, ₽`}>
+                  {numInput(selected.earningsByYear?.[y] ?? 0, (n) =>
+                    up({ earningsByYear: { ...(selected.earningsByYear ?? {}), [y]: n } })
+                  )}
+                </Field>
+              ))}
+            </div>
+          </Card>
+
+          {/* Личные данные */}
+          <Card title="Личные данные">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Дата рождения">
+                <input
+                  type="date"
+                  className={inputClass}
+                  value={selected.birthDate ?? ''}
+                  onChange={(e) => up({ birthDate: e.target.value || undefined })}
+                />
+              </Field>
+              <Field label="СНИЛС">
+                <input
+                  className={inputClass}
+                  placeholder="123-456-789 00"
+                  value={selected.snils ?? ''}
+                  onChange={(e) => up({ snils: e.target.value })}
+                />
+              </Field>
+              <Field label="Паспорт">
+                <input
+                  className={inputClass}
+                  placeholder="серия, номер, кем выдан"
+                  value={selected.passport ?? ''}
+                  onChange={(e) => up({ passport: e.target.value })}
+                />
+              </Field>
+              <Field label="Адрес">
+                <input
+                  className={inputClass}
+                  placeholder="г. ..., ул. ..."
+                  value={selected.address ?? ''}
+                  onChange={(e) => up({ address: e.target.value })}
+                />
+              </Field>
+            </div>
+          </Card>
+
+          {/* Печать документов по сотруднику */}
+          <Card title="Печать документов">
+            <div className="flex flex-wrap gap-2">
+              {(Object.keys(EMPLOYEE_DOC_TITLE) as EmployeeDocType[]).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setDocType(t)}
+                  className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+                >
+                  {EMPLOYEE_DOC_TITLE[t]}
+                </button>
+              ))}
+            </div>
+          </Card>
+
           {m && calc && (
             <Card title="Расчёт по сотруднику (в месяц)">
-              <Row label="Оклад (гросс)" value={dec(m.gross)} />
-              <Row label="− НДФЛ" hint="прогрессия, нарастающим за год" value={dec(m.ndfl)} />
-              <Row label="= На руки" value={dec(m.net)} strong />
+              {hasAdvance ? (
+                <>
+                  <Row label={`Аванс (${selected.advancePercent}%)`} value={dec(m.advance_gross)} />
+                  <Row label="− НДФЛ с аванса" value={dec(m.advance_ndfl)} />
+                  <Row label="= Аванс на руки" value={dec(m.advance_net)} strong />
+                  <div className="mt-3 border-t border-line pt-2">
+                    <Row label="Расчёт (остаток)" value={dec(m.settlement_gross)} />
+                    <Row label="− НДФЛ с расчёта" value={dec(m.settlement_ndfl)} />
+                    <Row label="= Расчёт на руки" value={dec(m.settlement_net)} strong />
+                  </div>
+                  <div className="mt-3 border-t border-line pt-2">
+                    <Row label="Итого НДФЛ за месяц" hint="аванс + расчёт" value={dec(m.ndfl)} strong />
+                    <Row label="Итого на руки" value={dec(m.net)} strong />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Row label="Оклад (гросс)" value={dec(m.gross)} />
+                  <Row label="− НДФЛ" hint="прогрессия, нарастающим за год" value={dec(m.ndfl)} />
+                  <Row label="= На руки" value={dec(m.net)} strong />
+                </>
+              )}
               <div className="mt-3 border-t border-line pt-2">
                 <Row label="Взносы с ФОТ" hint={selected.msp ? 'льгота МСП' : 'единый тариф'} value={dec(m.vznosy)} />
                 <Row label="Травматизм" hint="0,2%" value={dec(m.travmatizm)} />
@@ -178,32 +399,57 @@ function StaffRoster({ year }: { year: number }) {
           <p className="text-sm text-muted">Выберите сотрудника слева или добавьте нового.</p>
         </Card>
       )}
+
+      {docType && selected && (
+        <PrintModal
+          title={`${EMPLOYEE_DOC_TITLE[docType]} — ${selected.fio || 'сотрудник'}`}
+          onClose={() => setDocType(null)}
+        >
+          <EmployeeDoc type={docType} org={activeOrg} employee={selected} />
+        </PrintModal>
+      )}
     </div>
   )
 }
 
 // ---- Зарплата ----
 function SalaryCalc({ year }: { year: number }) {
+  const { employees } = useEmployees()
+  const [selId, setSelId] = useState('')
   const [gross, setGross] = useState(80_000)
   const [children, setChildren] = useState(0)
   const [msp, setMsp] = useState(true)
+  const [advancePercent, setAdvancePercent] = useState(0)
+
+  const pick = (e: Employee | null) => {
+    setSelId(e?.id ?? '')
+    if (e) {
+      setGross(e.salary)
+      setChildren(e.children)
+      setMsp(e.msp)
+      setAdvancePercent(e.advancePercent ?? 0)
+    }
+  }
 
   let r: ReturnType<typeof calcSalary> | null = null
   try {
-    r = calcSalary(year, gross, { children, msp })
+    r = calcSalary(year, gross, { children, msp, advancePercent: advancePercent / 100 })
   } catch {
     r = null
   }
   const m = r?.months[0]
+  const hasAdvance = advancePercent > 0
 
   return (
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
       <Card title="Параметры">
         <div className="space-y-4">
+          <EmployeePicker employees={employees} value={selId} onPick={pick} />
           <Field label="Оклад в месяц (гросс)" hint={formatRub(gross)}>
             {numInput(gross, setGross)}
           </Field>
           <Field label="Детей (для вычета)">{numInput(children, setChildren, { max: 10 })}</Field>
+          <Field label="Аванс, %" hint="0 = без разбивки">{numInput(advancePercent, (n) => setAdvancePercent(Math.min(100, n)), { max: 100 })}</Field>
           <label className="flex cursor-pointer items-center gap-2.5">
             <input
               type="checkbox"
@@ -240,6 +486,22 @@ function SalaryCalc({ year }: { year: number }) {
             </div>
           </Card>
 
+          {hasAdvance && (
+            <Card title={`Аванс и расчёт (аванс ${advancePercent}%)`}>
+              <Row label="Аванс (гросс)" value={dec(m.advance_gross)} />
+              <Row label="− НДФЛ с аванса" value={dec(m.advance_ndfl)} />
+              <Row label="= Аванс на руки" value={dec(m.advance_net)} strong />
+              <div className="mt-3 border-t border-line pt-2">
+                <Row label="Расчёт (гросс)" value={dec(m.settlement_gross)} />
+                <Row label="− НДФЛ с расчёта" value={dec(m.settlement_ndfl)} />
+                <Row label="= Расчёт на руки" value={dec(m.settlement_net)} strong />
+              </div>
+              <div className="mt-3 border-t border-line pt-2">
+                <Row label="Итого НДФЛ за месяц" hint="аванс + расчёт" value={dec(m.ndfl)} strong />
+              </div>
+            </Card>
+          )}
+
           <Card title="Как посчитано (в месяц)">
             <Row label="Оклад (гросс)" value={dec(m.gross)} />
             <Row label="− НДФЛ" hint="13% (прогрессия нарастающим за год)" value={dec(m.ndfl)} />
@@ -267,8 +529,19 @@ function SalaryCalc({ year }: { year: number }) {
 
 // ---- Отпускные ----
 function VacationCalc({ year }: { year: number }) {
+  const { employees } = useEmployees()
+  const [selId, setSelId] = useState('')
   const [base, setBase] = useState(960_000)
   const [days, setDays] = useState(28)
+
+  const pick = (e: Employee | null) => {
+    setSelId(e?.id ?? '')
+    if (e) {
+      const b = vacationBase12m(e.earningsByYear, year)
+      setBase(b > 0 ? b : e.salary * 12)
+    }
+  }
+
   let r: ReturnType<typeof calcVacation> | null = null
   try {
     r = calcVacation(year, base, days)
@@ -279,6 +552,7 @@ function VacationCalc({ year }: { year: number }) {
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
       <Card title="Параметры">
         <div className="space-y-4">
+          <EmployeePicker employees={employees} value={selId} onPick={pick} />
           <Field label="Заработок за 12 месяцев" hint={formatRub(base)}>{numInput(base, setBase)}</Field>
           <Field label="Дней отпуска">{numInput(days, setDays, { max: 60 })}</Field>
         </div>
@@ -310,13 +584,27 @@ function VacationCalc({ year }: { year: number }) {
 
 // ---- Больничные ----
 function SickCalc({ year }: { year: number }) {
+  const { employees } = useEmployees()
+  const [selId, setSelId] = useState('')
   const [e1, setE1] = useState(800_000)
   const [e2, setE2] = useState(750_000)
   const [stazh, setStazh] = useState(7)
   const [days, setDays] = useState(7)
+  const [month, setMonth] = useState(1)
+
+  const pick = (e: Employee | null) => {
+    setSelId(e?.id ?? '')
+    if (e) {
+      const { e1: b1, e2: b2 } = sickBases(e.earningsByYear, year)
+      setE1(b1)
+      setE2(b2)
+      setStazh(effectiveStazhYears(e))
+    }
+  }
+
   let r: ReturnType<typeof calcSickLeave> | null = null
   try {
-    r = calcSickLeave(year, e1, e2, stazh, days)
+    r = calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month))
   } catch {
     r = null
   }
@@ -324,9 +612,19 @@ function SickCalc({ year }: { year: number }) {
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
       <Card title="Параметры">
         <div className="space-y-4">
+          <EmployeePicker employees={employees} value={selId} onPick={pick} />
           <Field label={`Заработок за ${year - 1} год`} hint={formatRub(e1)}>{numInput(e1, setE1)}</Field>
           <Field label={`Заработок за ${year - 2} год`} hint={formatRub(e2)}>{numInput(e2, setE2)}</Field>
           <Field label="Стаж, лет">{numInput(stazh, setStazh, { max: 60 })}</Field>
+          <Field label="Месяц болезни" hint="влияет на минимум по МРОТ (дней в месяце)">
+            <select className={inputClass} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+              {MONTH_NAMES.map((nm, i) => (
+                <option key={i} value={i + 1}>
+                  {nm} ({daysInMonth(year, i + 1)} дн.)
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Дней болезни">{numInput(days, setDays, { max: 365 })}</Field>
         </div>
       </Card>
@@ -367,8 +665,16 @@ function SickCalc({ year }: { year: number }) {
 
 // ---- Алименты ----
 function AlimonyCalc() {
+  const { employees } = useEmployees()
+  const [selId, setSelId] = useState('')
   const [gross, setGross] = useState(80_000)
   const [children, setChildren] = useState(1)
+
+  const pick = (e: Employee | null) => {
+    setSelId(e?.id ?? '')
+    if (e) setGross(e.salary)
+  }
+
   const ndfl = Math.round(gross * 0.13)
   let r: ReturnType<typeof calcAlimony> | null = null
   try {
@@ -380,6 +686,7 @@ function AlimonyCalc() {
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
       <Card title="Параметры">
         <div className="space-y-4">
+          <EmployeePicker employees={employees} value={selId} onPick={pick} />
           <Field label="Доход в месяц (гросс)" hint={formatRub(gross)}>{numInput(gross, setGross)}</Field>
           <Field label="Детей на алименты">{numInput(children, setChildren, { max: 3 })}</Field>
           <p className="text-xs text-muted">НДФЛ учтён упрощённо 13% = {formatRub(ndfl)}</p>
@@ -401,6 +708,100 @@ function AlimonyCalc() {
           ))}
           <Note>Максимум удержания на детей — 70% от дохода после НДФЛ (ст. 99 ФЗ № 229-ФЗ).</Note>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ---- Сводка по штату ----
+function StaffSummary({ org }: { org: Org }) {
+  const { employees } = useEmployees()
+  const [print, setPrint] = useState(false)
+  const { rows, totals, count } = payrollSummary(org, employees)
+
+  if (employees.length === 0) {
+    return (
+      <Card>
+        <p className="text-sm text-muted">Добавьте сотрудников во вкладке «Штат» — здесь появится сводка.</p>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Card>
+          <div className="text-sm text-muted">ФОТ за год</div>
+          <div className="tnum mt-1 text-xl font-semibold text-ink">{formatRub(totals.grossYear)}</div>
+        </Card>
+        <Card>
+          <div className="text-sm text-muted">НДФЛ за год</div>
+          <div className="tnum mt-1 text-xl font-semibold text-ink">{formatRub(totals.ndflYear)}</div>
+        </Card>
+        <Card>
+          <div className="text-sm text-muted">Страховые взносы за год</div>
+          <div className="tnum mt-1 text-xl font-semibold text-brand-600">{formatRub(totals.vznosyYear)}</div>
+        </Card>
+        <Card>
+          <div className="text-sm text-muted">Стоимость для работодателя</div>
+          <div className="tnum mt-1 text-xl font-semibold text-ink">{formatRub(totals.employerCostYear)}</div>
+        </Card>
+      </div>
+
+      <Card
+        title={`Начисления по штату (${count} чел.)`}
+        right={
+          <button
+            type="button"
+            onClick={() => setPrint(true)}
+            className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            Печать ведомости
+          </button>
+        }
+      >
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                <th className="py-2 pr-3 font-medium">Сотрудник</th>
+                <th className="py-2 pr-3 text-right font-medium">Оклад/мес</th>
+                <th className="py-2 pr-3 text-right font-medium">НДФЛ/мес</th>
+                <th className="py-2 pr-3 text-right font-medium">На руки/мес</th>
+                <th className="py-2 pr-3 text-right font-medium">Взносы/год</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((a) => (
+                <tr key={a.e.id} className="border-b border-line/60">
+                  <td className="py-2 pr-3 text-ink">{a.e.fio || 'Без имени'}</td>
+                  <td className="tnum py-2 pr-3 text-right">{formatRub(a.grossMonth)}</td>
+                  <td className="tnum py-2 pr-3 text-right">{formatRub(a.ndflMonth)}</td>
+                  <td className="tnum py-2 pr-3 text-right">{formatRub(a.netMonth)}</td>
+                  <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(a.vznosyYear)}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-line font-semibold">
+                <td className="py-2 pr-3">Итого</td>
+                <td className="tnum py-2 pr-3 text-right">{formatRub(totals.grossMonth)}</td>
+                <td className="tnum py-2 pr-3 text-right">{formatRub(totals.ndflMonth)}</td>
+                <td className="tnum py-2 pr-3 text-right">{formatRub(totals.netMonth)}</td>
+                <td className="tnum py-2 pr-3 text-right">{formatRub(totals.vznosyYear)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      <Note>
+        Суммы за год — проекция при равном окладе. Страховые взносы по всему штату:{' '}
+        {formatRub(totals.vznosyYear)} (+ травматизм {formatRub(totals.travmYear)}).
+      </Note>
+
+      {print && (
+        <PrintModal title="Расчётно-платёжная ведомость — предпросмотр" onClose={() => setPrint(false)}>
+          <PayrollStatementDoc org={org} employees={employees} />
+        </PrintModal>
       )}
     </div>
   )
@@ -515,6 +916,7 @@ export function Employees() {
       {tab === 'vacation' && <VacationCalc year={activeOrg.year} />}
       {tab === 'sick' && <SickCalc year={activeOrg.year} />}
       {tab === 'alimony' && <AlimonyCalc />}
+      {tab === 'summary' && <StaffSummary org={activeOrg} />}
       {tab === 'reports' && <ReportsTab org={activeOrg} />}
     </div>
   )

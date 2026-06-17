@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from .models import round_rub, to_decimal
+from .params import get_params
 
 __all__ = [
     "VAT_EXEMPT_THRESHOLD",
@@ -32,10 +33,11 @@ __all__ = [
     "calc_vat_usn",
 ]
 
-# Пороги дохода (без НДS), ₽.
-VAT_EXEMPT_THRESHOLD = Decimal("60000000")   # ≤ 60 млн → освобождение
-VAT_RATE5_LIMIT = Decimal("250000000")       # 60–250 млн → 5%
-VAT_RATE7_LIMIT = Decimal("450000000")       # 250–450 млн → 7%
+# Историч. дефолты (2025). Фактические пороги/ставка берутся из параметров года (get_params):
+# с 2026 порог освобождения 20 млн ₽ и общая ставка 22% (ФЗ № 425-ФЗ).
+VAT_EXEMPT_THRESHOLD = Decimal("60000000")
+VAT_RATE5_LIMIT = Decimal("250000000")
+VAT_RATE7_LIMIT = Decimal("450000000")
 
 
 @dataclass
@@ -69,26 +71,28 @@ def calc_vat_usn(
     :param income_includes_vat: True, если выручка указана С НДС (тогда налог выделяется изнутри).
     :param input_vat: входящий НДС к вычету (только для общей ставки 20%).
     """
+    if mode == "general20":
+        mode = "general"  # обратная совместимость
+
+    p = get_params(year)
+    exempt_threshold = p.vat_exempt_threshold
+    rate5_limit = p.vat_rate5_limit
+    rate7_limit = p.vat_rate7_limit
+    general_rate = p.vat_general_rate
+
     inc = to_decimal(income)
     prior = to_decimal(prior_year_income)
     if inc < 0 or prior < 0:
         raise ValueError("Доход не может быть отрицательным")
 
     threshold_base = max(inc, prior)
-    obligated = threshold_base > VAT_EXEMPT_THRESHOLD
+    obligated = threshold_base > exempt_threshold
     notes: list[str] = []
 
-    if year >= 2027:
-        notes.append(
-            "С 2027 порог освобождения от НДС планово снижается (15 млн ₽) — "
-            "проверить актуальное значение."
-        )
-
-    # Освобождение: явный режим «без НДС» ИЛИ доход ≤ 60 млн (любой режим — нельзя
-    # начислять НДС, когда бизнес освобождён по ст. 145).
+    # Освобождение: явный режим «без НДС» ИЛИ доход ниже порога.
     if mode == "none" or not obligated:
         if not obligated:
-            notes.append("Доход ≤ 60 млн ₽ — освобождение от НДС (ст. 145 НК РФ).")
+            notes.append(f"Доход ≤ {exempt_threshold:.0f} ₽ — освобождение от НДС (ст. 145 НК РФ).")
         else:
             notes.append("НДС не начисляется по выбору (режим «без НДС»).")
         return VatResult(
@@ -102,11 +106,12 @@ def calc_vat_usn(
             notes=notes,
         )
 
-    # Доход выше потолка УСН (450 млн) — спец-ставки 5/7% неприменимы (право на УСН утрачено).
-    if mode in ("auto", "rate5", "rate7") and inc > VAT_RATE7_LIMIT:
+    # Спец-ставки 5/7 (и авто) недоступны при доходе выше потолка УСН — право на УСН утрачено.
+    special_requested = mode in ("auto", "rate5", "rate7")
+    if special_requested and inc > rate7_limit:
         notes.append(
-            "Доход превысил 450 млн ₽ — право на УСН утрачено: НДС считается по общей системе "
-            "(ОСНО, ставка 20%); спец-ставка 5/7% неприменима."
+            f"Доход превысил {rate7_limit:.0f} ₽ — право на УСН утрачено: НДС по общей системе; "
+            "спец-ставка 5/7% неприменима."
         )
         return VatResult(
             obligated=True,
@@ -119,24 +124,23 @@ def calc_vat_usn(
             notes=notes,
         )
 
-    # Определение ставки. Спец-ставка ЖЁСТКО определяется доходом (ст. 164 НК): 5% при
-    # 60–250 млн, 7% при 250–450 млн — выбрать «5%» при доходе 300 млн нельзя.
-    if mode == "general20":
-        rate, applied_mode = Decimal("20"), "general20"
+    # Определение ставки и ветки (спец 5/7 — без вычета; общая 10/20/22 — с вычетом).
+    if mode == "general":
+        rate, applied_mode, special = general_rate, "general", False
+    elif mode == "rate10":
+        rate, applied_mode, special = Decimal("10"), "rate10", False
     elif mode in ("auto", "rate5", "rate7"):
-        rate = Decimal("5") if inc <= VAT_RATE5_LIMIT else Decimal("7")
+        rate = Decimal("5") if inc <= rate5_limit else Decimal("7")
         applied_mode = "rate5" if rate == Decimal("5") else "rate7"
+        special = True
         if mode == "rate5" and rate != Decimal("5"):
-            notes.append("При доходе свыше 250 млн ₽ применяется ставка 7%, а не 5% (ст. 164 НК РФ).")
+            notes.append(f"При доходе свыше {rate5_limit:.0f} ₽ применяется 7%, а не 5% (ст. 164 НК РФ).")
         elif mode == "rate7" and rate != Decimal("7"):
-            notes.append("При доходе до 250 млн ₽ применяется ставка 5%, а не 7% (ст. 164 НК РФ).")
+            notes.append(f"При доходе до {rate5_limit:.0f} ₽ применяется 5%, а не 7% (ст. 164 НК РФ).")
     else:
         raise ValueError(f"Неизвестный режим НДС: {mode!r}")
 
-    if inc > VAT_RATE7_LIMIT:
-        notes.append("Доход превышает 450 млн ₽ — утрата права на УСН, проверить отдельно.")
-
-    if rate in (Decimal("5"), Decimal("7")):
+    if special:
         # Спец-ставки: налоговая база = выручка без НДС, вычет входящего НДС не применяется.
         if income_includes_vat:
             base = inc / (Decimal("1") + rate / Decimal("100"))
@@ -150,20 +154,20 @@ def calc_vat_usn(
             "(входящий учитывается в стоимости, ст. 170 НК РФ)."
         )
     else:
-        # Общая ставка 20%: НДС = исходящий − входящий (к вычету).
+        # Общая ставка (10/20/22): НДС = исходящий − входящий (к вычету).
         if income_includes_vat:
-            base = inc / Decimal("1.20")
+            base = inc / (Decimal("1") + rate / Decimal("100"))
             output = inc - base
         else:
             base = inc
-            output = inc * Decimal("0.20")
+            output = inc * rate / Decimal("100")
         deducted = to_decimal(input_vat)
         if deducted < 0:
             raise ValueError("Входящий НДС не может быть отрицательным")
         vat = output - deducted
         if vat < 0:
             vat = Decimal("0")
-        notes.append("Общая ставка 20% — с вычетом входящего НДС (ст. 171–172 НК РФ).")
+        notes.append(f"Общая ставка {rate}% — с вычетом входящего НДС (ст. 171–172 НК РФ).")
 
     return VatResult(
         obligated=True,

@@ -27,6 +27,10 @@ class YearParams:
     usn_income_rate: Decimal             # базовая ставка «Доходы» (регион может снизить)
     usn_income_minus_rate: Decimal       # базовая ставка «Доходы минус расходы»
     usn_min_tax_rate: Decimal            # ставка минимального налога (1% от доходов)
+    vat_exempt_threshold: Decimal        # НДС: порог освобождения (доход за год), ст. 145 НК РФ
+    vat_rate5_limit: Decimal             # НДС: верхняя граница спец-ставки 5% (доход)
+    vat_rate7_limit: Decimal             # НДС: верхняя граница 7% — выше = утрата УСН
+    vat_general_rate: Decimal            # НДС: общая ставка, % (20% до 2026, 22% с 2026)
     verified: bool                       # сверено с официальным источником/бухгалтером
     note: str = ""
 
@@ -43,8 +47,12 @@ YEARS: dict[int, YearParams] = {
         usn_income_rate=_D("0.06"),
         usn_income_minus_rate=_D("0.15"),
         usn_min_tax_rate=_D("0.01"),
+        vat_exempt_threshold=_D("60000000"),
+        vat_rate5_limit=_D("250000000"),
+        vat_rate7_limit=_D("450000000"),
+        vat_general_rate=_D("20"),
         verified=True,
-        note="Фикс 49 500 ₽ и потолок 1% = 277 571 ₽ — ст. 430 НК РФ.",
+        note="Фикс 49 500 ₽ и потолок 1% = 277 571 ₽ — ст. 430 НК РФ. (НДС для УСН введён с 2025.)",
     ),
     2025: YearParams(
         year=2025,
@@ -55,8 +63,12 @@ YEARS: dict[int, YearParams] = {
         usn_income_rate=_D("0.06"),
         usn_income_minus_rate=_D("0.15"),
         usn_min_tax_rate=_D("0.01"),
+        vat_exempt_threshold=_D("60000000"),
+        vat_rate5_limit=_D("250000000"),
+        vat_rate7_limit=_D("450000000"),
+        vat_general_rate=_D("20"),
         verified=True,
-        note="Фикс 53 658 ₽ и потолок 1% = 300 888 ₽ — ст. 430 НК РФ.",
+        note="Фикс 53 658 ₽ и потолок 1% = 300 888 ₽ — ст. 430 НК РФ. НДС для УСН: освобождение ≤60 млн, спец-ставки 5/7%, общая 20% (ФЗ № 176-ФЗ).",
     ),
     2026: YearParams(
         year=2026,
@@ -67,12 +79,16 @@ YEARS: dict[int, YearParams] = {
         usn_income_rate=_D("0.06"),
         usn_income_minus_rate=_D("0.15"),
         usn_min_tax_rate=_D("0.01"),
+        vat_exempt_threshold=_D("20000000"),
+        vat_rate5_limit=_D("272500000"),
+        vat_rate7_limit=_D("490500000"),
+        vat_general_rate=_D("22"),
         verified=True,
         note=(
-            "Фикс 57 390 ₽ и потолок 1% = 321 818 ₽ — ст. 430 НК РФ (ред. ФЗ № 176-ФЗ "
-            "от 12.07.2024). Максимум «за себя» 2026 = 57 390 + 321 818 = 379 208 ₽ "
-            "(достигается при доходе ≥ 32 481 800 ₽). Отдельно учитывать НДС на УСН "
-            "(реформа 2025) при доходе свыше порога."
+            "Фикс 57 390 ₽ и потолок 1% = 321 818 ₽ — ст. 430 НК РФ. Максимум «за себя» 2026 = "
+            "379 208 ₽. НДС (ФЗ № 425-ФЗ от 28.11.2025): общая ставка 22%, порог освобождения "
+            "снижен 60→20 млн ₽, спец-ставки 5% (20–272,5 млн) / 7% (272,5–490,5 млн, дефлятор "
+            "1,090 — сверить)."
         ),
     ),
 }

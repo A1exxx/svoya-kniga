@@ -8,10 +8,15 @@ import { DocsProvider } from './state/docsStore'
 import { ContractorsProvider } from './state/contractorsStore'
 import { GoodsProvider } from './state/goodsStore'
 import { EmployeesProvider } from './state/employeesStore'
+import { ArchiveProvider } from './state/archiveStore'
+import { TaxOfficeProvider } from './state/taxOfficeStore'
 import { applyOverrides } from './state/paramsStore'
+import { maybeAutoSnapshot } from './lib/storage/storeAdmin'
 
 // Применяем локальные правки параметров (если есть) до первого рендера.
 applyOverrides()
+// Автоснимок данных раз в сутки (защита от потери) — до рендера.
+maybeAutoSnapshot()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -21,7 +26,11 @@ createRoot(document.getElementById('root')!).render(
           <GoodsProvider>
             <EmployeesProvider>
               <DocsProvider>
-                <App />
+                <ArchiveProvider>
+                  <TaxOfficeProvider>
+                    <App />
+                  </TaxOfficeProvider>
+                </ArchiveProvider>
               </DocsProvider>
             </EmployeesProvider>
           </GoodsProvider>

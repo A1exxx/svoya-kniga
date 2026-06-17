@@ -38,6 +38,20 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
   const pv = (i: number, fn: (p: (typeof periods)[number]) => { toNumber: () => number }) =>
     periods[i] ? v(fn(periods[i])) : '—'
 
+  // Доходы/расходы нарастающим итогом по кварталам (для раздела 2.2 Д−Р).
+  const qIncCum: number[] = []
+  const qExpCum: number[] = []
+  if (quarterly) {
+    let si = 0
+    let se = 0
+    for (const q of computed.byQuarter) {
+      si += q.income
+      se += q.expense
+      qIncCum.push(si)
+      qExpCum.push(se)
+    }
+  }
+
   const taxName = isIncome
     ? 'Раздел 2.1.1. Расчёт налога (объект «Доходы»)'
     : 'Раздел 2.2. Расчёт налога (объект «Доходы минус расходы»)'
@@ -107,6 +121,26 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
                 <Line code="143" label="Сумма страховых взносов, уменьшающая налог" value={v(yearP.deduction_cumulative)} />
               </>
             )
+          ) : quarterly ? (
+            <>
+              <Line code="210" label="Доходы за 1 квартал" value={v(qIncCum[0])} />
+              <Line code="211" label="Доходы за полугодие" value={v(qIncCum[1])} />
+              <Line code="212" label="Доходы за 9 месяцев" value={v(qIncCum[2])} />
+              <Line code="213" label="Доходы за год" value={v(qIncCum[3])} />
+              <Line code="220" label="Расходы за 1 квартал" value={v(qExpCum[0])} />
+              <Line code="221" label="Расходы за полугодие" value={v(qExpCum[1])} />
+              <Line code="222" label="Расходы за 9 месяцев" value={v(qExpCum[2])} />
+              <Line code="223" label="Расходы за год" value={v(qExpCum[3])} />
+              <Line code="240" label="Налоговая база за 1 квартал" value={pv(0, (p) => p.tax_base_cumulative)} />
+              <Line code="241" label="Налоговая база за полугодие" value={pv(1, (p) => p.tax_base_cumulative)} />
+              <Line code="242" label="Налоговая база за 9 месяцев" value={pv(2, (p) => p.tax_base_cumulative)} />
+              <Line code="243" label="Налоговая база за год" value={pv(3, (p) => p.tax_base_cumulative)} />
+              <Line code="270" label="Налог за 1 квартал" value={pv(0, (p) => p.tax_before_deduction_cumulative)} />
+              <Line code="271" label="Налог за полугодие" value={pv(1, (p) => p.tax_before_deduction_cumulative)} />
+              <Line code="272" label="Налог за 9 месяцев" value={pv(2, (p) => p.tax_before_deduction_cumulative)} />
+              <Line code="273" label="Налог за год" value={pv(3, (p) => p.tax_before_deduction_cumulative)} />
+              <Line code="280" label="Сумма минимального налога (1% от доходов)" value={v(computed.usn.min_tax)} />
+            </>
           ) : (
             <>
               <Line code="213" label="Сумма полученных доходов за налоговый период" value={v(annualIncome)} />
