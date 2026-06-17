@@ -12,30 +12,38 @@ import { ArchiveProvider } from './state/archiveStore'
 import { TaxOfficeProvider } from './state/taxOfficeStore'
 import { applyOverrides } from './state/paramsStore'
 import { maybeAutoSnapshot } from './lib/storage/storeAdmin'
+import { recoverFromIdb } from './lib/storage/idb'
 
-// Применяем локальные правки параметров (если есть) до первого рендера.
-applyOverrides()
-// Автоснимок данных раз в сутки (защита от потери) — до рендера.
-maybeAutoSnapshot()
+function render() {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <OrgProvider>
+        <OpsProvider>
+          <ContractorsProvider>
+            <GoodsProvider>
+              <EmployeesProvider>
+                <DocsProvider>
+                  <ArchiveProvider>
+                    <TaxOfficeProvider>
+                      <App />
+                    </TaxOfficeProvider>
+                  </ArchiveProvider>
+                </DocsProvider>
+              </EmployeesProvider>
+            </GoodsProvider>
+          </ContractorsProvider>
+        </OpsProvider>
+      </OrgProvider>
+    </StrictMode>,
+  )
+}
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <OrgProvider>
-      <OpsProvider>
-        <ContractorsProvider>
-          <GoodsProvider>
-            <EmployeesProvider>
-              <DocsProvider>
-                <ArchiveProvider>
-                  <TaxOfficeProvider>
-                    <App />
-                  </TaxOfficeProvider>
-                </ArchiveProvider>
-              </DocsProvider>
-            </EmployeesProvider>
-          </GoodsProvider>
-        </ContractorsProvider>
-      </OpsProvider>
-    </OrgProvider>
-  </StrictMode>,
-)
+// Восстанавливаем данные из IndexedDB-зеркала (если localStorage очищали), затем рендерим.
+async function boot() {
+  await recoverFromIdb()
+  applyOverrides() // локальные правки параметров до первого рендера
+  maybeAutoSnapshot() // автоснимок раз в сутки (защита от потери)
+  render()
+}
+
+void boot()

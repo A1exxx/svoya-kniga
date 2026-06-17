@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg, type Org } from './orgStore'
 import { calcVatUsn, getParams } from '../lib/taxcore'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
 export interface DocItem {
   id: string
@@ -136,11 +138,7 @@ export function DocsProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const docs = store[activeOrgId] ?? []
@@ -165,18 +163,28 @@ export function DocsProvider({ children }: { children: ReactNode }) {
       note: '',
       paymentStatus: 'unpaid',
     }
+    logChange('Документ', 'create', `${DOC_TYPE_LABEL[type]} № ${nextNumber}`)
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), doc] }))
     return id
   }
 
-  const updateDoc = (id: string, patch: Partial<Doc>) =>
+  const updateDoc = (id: string, patch: Partial<Doc>) => {
+    const old = docs.find((d) => d.id === id)
+    if (old) {
+      const d = diffFields(old as unknown as Record<string, unknown>, patch as Record<string, unknown>)
+      if (d) logChange('Документ', 'update', `${DOC_TYPE_LABEL[old.type]} № ${old.number}`, d)
+    }
     setStore((s) => ({
       ...s,
       [activeOrgId]: (s[activeOrgId] ?? []).map((d) => (d.id === id ? { ...d, ...patch } : d)),
     }))
+  }
 
-  const removeDoc = (id: string) =>
+  const removeDoc = (id: string) => {
+    const old = docs.find((d) => d.id === id)
+    if (old) logChange('Документ', 'delete', `${DOC_TYPE_LABEL[old.type]} № ${old.number}`)
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((d) => d.id !== id) }))
+  }
 
   return (
     <DocsCtx.Provider value={{ docs, addDoc, updateDoc, removeDoc }}>{children}</DocsCtx.Provider>

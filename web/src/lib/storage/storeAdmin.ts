@@ -72,6 +72,41 @@ export function clearAudit(): void {
   localStorage.removeItem(AUDIT_KEY)
 }
 
+const FIELD_HIDE = new Set(['logo', 'signature', 'stamp', 'id', 'linkedOpId'])
+
+function fmtVal(v: unknown): string {
+  if (v == null || v === '') return '∅'
+  if (typeof v === 'object') return '…'
+  return String(v)
+}
+
+/** Человеческий diff изменённых полей: «оклад 60000→80000; дети 0→1». Картинки/служебные скрываются. */
+export function diffFields(before: object | undefined, patch: object): string {
+  const b = (before ?? {}) as Record<string, unknown>
+  const p = patch as Record<string, unknown>
+  const parts: string[] = []
+  for (const k of Object.keys(p)) {
+    if (FIELD_HIDE.has(k)) {
+      parts.push(`${k}: изменено`)
+      continue
+    }
+    if (JSON.stringify(b[k]) === JSON.stringify(p[k])) continue
+    parts.push(`${k}: ${fmtVal(b[k])}→${fmtVal(p[k])}`)
+  }
+  return parts.join('; ')
+}
+
+/** Запись в журнал об изменении сущности (создание/правка/удаление по полям). */
+export function logChange(
+  entity: string,
+  action: 'create' | 'update' | 'delete',
+  label: string,
+  detail = ''
+): void {
+  const a = action === 'create' ? 'Создание' : action === 'delete' ? 'Удаление' : 'Изменение'
+  logAudit(`${a}: ${entity}`, detail ? `${label} — ${detail}` : label)
+}
+
 // ---------- Снимки ----------
 
 export function listSnapshots(): Snapshot[] {

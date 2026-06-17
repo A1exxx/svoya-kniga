@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
 /** Хозяйственная операция (доход/расход) для КУДиР и расчёта. */
 export interface Operation {
@@ -46,29 +48,37 @@ export function OpsProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const ops = store[activeOrgId] ?? []
+  const opLabel = (o: Operation) =>
+    `${o.kind === 'income' ? 'приход' : 'расход'} ${o.amount} ₽${o.counterparty ? ` (${o.counterparty})` : ''}`
 
   const addOp = (op: Omit<Operation, 'id'>): string => {
     const id = makeId()
+    logChange('Операция', 'create', opLabel({ ...op, id }))
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), { ...op, id }] }))
     return id
   }
 
-  const updateOp = (id: string, patch: Partial<Operation>) =>
+  const updateOp = (id: string, patch: Partial<Operation>) => {
+    const old = ops.find((o) => o.id === id)
+    if (old) {
+      const d = diffFields(old, patch)
+      if (d) logChange('Операция', 'update', opLabel(old), d)
+    }
     setStore((s) => ({
       ...s,
       [activeOrgId]: (s[activeOrgId] ?? []).map((o) => (o.id === id ? { ...o, ...patch } : o)),
     }))
+  }
 
-  const removeOp = (id: string) =>
+  const removeOp = (id: string) => {
+    const old = ops.find((o) => o.id === id)
+    if (old) logChange('Операция', 'delete', opLabel(old))
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((o) => o.id !== id) }))
+  }
 
   return <OpsCtx.Provider value={{ ops, addOp, updateOp, removeOp }}>{children}</OpsCtx.Provider>
 }

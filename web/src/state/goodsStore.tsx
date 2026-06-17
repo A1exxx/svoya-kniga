@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
 export type GoodKind = 'service' | 'product'
 
@@ -51,11 +53,7 @@ export function GoodsProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const goods = store[activeOrgId] ?? []
@@ -63,18 +61,28 @@ export function GoodsProvider({ children }: { children: ReactNode }) {
   const addGood = (): string => {
     const id = makeId()
     const g: Good = { id, kind: 'service', name: '', unit: 'усл.', price: 0, note: '' }
+    logChange('Номенклатура', 'create', 'Новая позиция')
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), g] }))
     return id
   }
 
-  const updateGood = (id: string, patch: Partial<Good>) =>
+  const updateGood = (id: string, patch: Partial<Good>) => {
+    const old = goods.find((g) => g.id === id)
+    if (old) {
+      const d = diffFields(old, patch)
+      if (d) logChange('Номенклатура', 'update', old.name || 'позиция', d)
+    }
     setStore((s) => ({
       ...s,
       [activeOrgId]: (s[activeOrgId] ?? []).map((g) => (g.id === id ? { ...g, ...patch } : g)),
     }))
+  }
 
-  const removeGood = (id: string) =>
+  const removeGood = (id: string) => {
+    const old = goods.find((g) => g.id === id)
+    if (old) logChange('Номенклатура', 'delete', old.name || 'позиция')
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((g) => g.id !== id) }))
+  }
 
   return (
     <Ctx.Provider value={{ goods, addGood, updateGood, removeGood }}>{children}</Ctx.Provider>

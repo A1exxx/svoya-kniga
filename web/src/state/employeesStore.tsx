@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
 /** Сотрудник в штате организации (для расчётов и отчётности). */
 export interface Employee {
@@ -88,11 +90,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const employees = store[activeOrgId] ?? []
@@ -114,18 +112,28 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
       earningsByYear: {},
       msp: true,
     }
+    logChange('Сотрудник', 'create', 'Новый сотрудник')
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), e] }))
     return id
   }
 
-  const updateEmployee = (id: string, patch: Partial<Employee>) =>
+  const updateEmployee = (id: string, patch: Partial<Employee>) => {
+    const old = employees.find((e) => e.id === id)
+    if (old) {
+      const d = diffFields(old, patch)
+      if (d) logChange('Сотрудник', 'update', old.fio || 'сотрудник', d)
+    }
     setStore((s) => ({
       ...s,
       [activeOrgId]: (s[activeOrgId] ?? []).map((e) => (e.id === id ? { ...e, ...patch } : e)),
     }))
+  }
 
-  const removeEmployee = (id: string) =>
+  const removeEmployee = (id: string) => {
+    const old = employees.find((e) => e.id === id)
+    if (old) logChange('Сотрудник', 'delete', old.fio || 'сотрудник')
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((e) => e.id !== id) }))
+  }
 
   return (
     <Ctx.Provider value={{ employees, addEmployee, updateEmployee, removeEmployee }}>

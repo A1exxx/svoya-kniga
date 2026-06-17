@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
 import type { InnStatus } from '../lib/innLookup'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
 export type ContractorType = 'ul' | 'ip' | 'person'
 
@@ -57,11 +59,7 @@ export function ContractorsProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const contractors = store[activeOrgId] ?? []
@@ -69,18 +67,28 @@ export function ContractorsProvider({ children }: { children: ReactNode }) {
   const addContractor = (): string => {
     const id = makeId()
     const c: Contractor = { id, type: 'ul', name: '', inn: '', kpp: '', address: '', note: '' }
+    logChange('Контрагент', 'create', 'Новый контрагент')
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), c] }))
     return id
   }
 
-  const updateContractor = (id: string, patch: Partial<Contractor>) =>
+  const updateContractor = (id: string, patch: Partial<Contractor>) => {
+    const old = contractors.find((c) => c.id === id)
+    if (old) {
+      const d = diffFields(old, patch)
+      if (d) logChange('Контрагент', 'update', old.name || 'контрагент', d)
+    }
     setStore((s) => ({
       ...s,
       [activeOrgId]: (s[activeOrgId] ?? []).map((c) => (c.id === id ? { ...c, ...patch } : c)),
     }))
+  }
 
-  const removeContractor = (id: string) =>
+  const removeContractor = (id: string) => {
+    const old = contractors.find((c) => c.id === id)
+    if (old) logChange('Контрагент', 'delete', old.name || 'контрагент')
     setStore((s) => ({ ...s, [activeOrgId]: (s[activeOrgId] ?? []).filter((c) => c.id !== id) }))
+  }
 
   return (
     <Ctx.Provider value={{ contractors, addContractor, updateContractor, removeContractor }}>

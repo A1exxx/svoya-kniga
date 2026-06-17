@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
+import { persistKey } from '../lib/storage/idb'
 
 /** Что можно повторно открыть/распечатать из архива. */
 export type ArchiveDocKind = 'declaration' | 'ens' | 'vat' | 'payroll' | null
@@ -50,11 +51,7 @@ export function ArchiveProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const records = store[activeOrgId] ?? []

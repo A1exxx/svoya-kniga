@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { useOrg } from './orgStore'
 import type { ReconciliationKind } from '../lib/fns/gateway'
+import { persistKey } from '../lib/storage/idb'
 
 /** Запись сальдо ЕНС (вносится вручную из ЛК ФНС). */
 export interface EnsBalanceEntry {
@@ -77,11 +78,7 @@ export function TaxOfficeProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<Store>(load)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(store))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify(store))
   }, [store])
 
   const data = store[activeOrgId] ?? EMPTY

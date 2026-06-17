@@ -1,5 +1,10 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { DEFAULT_YEAR, type UsnObject } from '../lib/taxcore'
+import { persistKey } from '../lib/storage/idb'
+import { logChange, diffFields } from '../lib/storage/storeAdmin'
+
+const orgLabel = (o: { name?: string; fio?: string; inn?: string }) =>
+  o.name || o.fio || (o.inn ? `ИП ${o.inn}` : 'ИП')
 
 /**
  * Выбранный режим НДС для ИП на УСН. `auto` — определять по доходу (как раньше);
@@ -129,35 +134,42 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [refreshTick, setRefreshTick] = useState(0)
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify({ orgs, activeOrgId }))
-    } catch {
-      /* ignore */
-    }
+    persistKey(KEY, JSON.stringify({ orgs, activeOrgId }))
   }, [orgs, activeOrgId])
 
   const activeOrg = orgs.find((o) => o.id === activeOrgId) ?? orgs[0]
 
   const setActiveOrgId = (id: string) => setState((s) => ({ ...s, activeOrgId: id }))
 
-  const addOrg = () =>
+  const addOrg = () => {
+    logChange('ИП', 'create', 'Новый ИП')
     setState((s) => {
       const o = blankOrg()
       return { orgs: [...s.orgs, o], activeOrgId: o.id }
     })
+  }
 
-  const updateOrg = (id: string, patch: Partial<Org>) =>
+  const updateOrg = (id: string, patch: Partial<Org>) => {
+    const old = orgs.find((o) => o.id === id)
+    if (old) {
+      const d = diffFields(old, patch)
+      if (d) logChange('ИП', 'update', orgLabel(old), d)
+    }
     setState((s) => ({ ...s, orgs: s.orgs.map((o) => (o.id === id ? { ...o, ...patch } : o)) }))
+  }
 
   const updateActiveOrg = (patch: Partial<Org>) => updateOrg(activeOrgId, patch)
 
-  const removeOrg = (id: string) =>
+  const removeOrg = (id: string) => {
+    const old = orgs.find((o) => o.id === id)
+    if (old && orgs.length > 1) logChange('ИП', 'delete', orgLabel(old))
     setState((s) => {
       if (s.orgs.length <= 1) return s // не удаляем последнюю
       const orgs = s.orgs.filter((o) => o.id !== id)
       const activeOrgId = s.activeOrgId === id ? orgs[0].id : s.activeOrgId
       return { orgs, activeOrgId }
     })
+  }
 
   const forceRefresh = () => setRefreshTick((t) => t + 1)
 
