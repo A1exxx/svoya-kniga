@@ -71,6 +71,9 @@ export const IconPlus = (p: IconProps) => (
 export const IconReport = (p: IconProps) => (
   <svg {...base(p)}><rect x="5" y="4" width="14" height="17" rx="2" /><path d="M9 4h6v3H9z" /><path d="M8.5 13l2 2 4-4" /></svg>
 )
+export const IconMenu = (p: IconProps) => (
+  <svg {...base(p)}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+)
 export const IconPatent = (p: IconProps) => (
   <svg {...base(p)}><rect x="4" y="4" width="16" height="12" rx="2" /><path d="M7 8h10M7 11h6" /><circle cx="16.5" cy="17.5" r="2.5" /><path d="M14.6 19.2L13.5 22l3-1.1 3 1.1-1.1-2.8" /></svg>
 )

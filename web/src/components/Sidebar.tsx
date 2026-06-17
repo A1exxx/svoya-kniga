@@ -30,7 +30,7 @@ export const NAV = [
   { to: '/settings', label: 'Настройки', Icon: IconSettings },
 ] as const
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { orgs, activeOrgId, setActiveOrgId, addOrg } = useOrg()
 
   return (
@@ -50,6 +50,7 @@ export function Sidebar() {
               key={to}
               to={to}
               end={Boolean(end)}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                   isActive

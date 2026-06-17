@@ -7,8 +7,16 @@ export interface DocItem {
   price: number
 }
 
-export type DocType = 'invoice' | 'act'
+export type DocType = 'invoice' | 'act' | 'waybill' | 'upd'
 export type VatMode = 'none' | '5' | '7' | '10' | '20'
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export const DOC_TYPE_LABEL: Record<DocType, string> = {
+  invoice: 'Счёт',
+  act: 'Акт',
+  waybill: 'Накладная',
+  upd: 'УПД',
+}
 
 export interface Doc {
   id: string
@@ -20,6 +28,8 @@ export interface Doc {
   items: DocItem[]
   vatMode: VatMode
   note: string
+  paymentStatus: PaymentStatus
+  paidDate?: string // YYYY-MM-DD
 }
 
 const KEY = 'svoyakniga.docs.v1'
@@ -78,6 +88,7 @@ export function DocsProvider({ children }: { children: ReactNode }) {
       items: [{ name: '', qty: 1, price: 0 }],
       vatMode: 'none',
       note: '',
+      paymentStatus: 'unpaid',
     }
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), doc] }))
     return id

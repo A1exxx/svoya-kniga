@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { useOrg } from '../state/orgStore'
-import { docTotals, useDocs, type DocItem, type VatMode } from '../state/docsStore'
+import {
+  DOC_TYPE_LABEL,
+  docTotals,
+  useDocs,
+  type DocItem,
+  type DocType,
+  type PaymentStatus,
+  type VatMode,
+} from '../state/docsStore'
 import { contractorDetails, useContractors } from '../state/contractorsStore'
 import { useGoods } from '../state/goodsStore'
 import { formatRub, formatDate } from '../lib/format'
@@ -17,6 +25,19 @@ const VAT_OPTIONS: { value: VatMode; label: string }[] = [
   { value: '20', label: 'НДС 20%' },
 ]
 
+const PAY_BADGE: Record<PaymentStatus, { label: string; cls: string }> = {
+  unpaid: { label: 'Не оплачен', cls: 'bg-amber-50 text-warn' },
+  partial: { label: 'Частично', cls: 'bg-brand-50 text-brand-600' },
+  paid: { label: 'Оплачен', cls: 'bg-green-50 text-ok' },
+}
+
+const CREATE_BUTTONS: { type: DocType; primary?: boolean }[] = [
+  { type: 'invoice', primary: true },
+  { type: 'act' },
+  { type: 'waybill' },
+  { type: 'upd' },
+]
+
 export function Documents() {
   const { activeOrg } = useOrg()
   const { docs, addDoc, updateDoc, removeDoc } = useDocs()
@@ -28,7 +49,7 @@ export function Documents() {
   const selected = docs.find((d) => d.id === selectedId) ?? null
   const printDoc = docs.find((d) => d.id === printId) ?? null
 
-  const create = (type: 'invoice' | 'act') => setSelectedId(addDoc(type))
+  const create = (type: DocType) => setSelectedId(addDoc(type))
 
   const setItem = (idx: number, patch: Partial<DocItem>) => {
     if (!selected) return
@@ -39,18 +60,22 @@ export function Documents() {
   const removeItem = (idx: number) =>
     selected && updateDoc(selected.id, { items: selected.items.filter((_, i) => i !== idx) })
 
-  // Подставить контрагента из справочника в покупателя.
   const pickContractor = (id: string) => {
     const c = contractors.find((x) => x.id === id)
     if (!selected || !c) return
     updateDoc(selected.id, { buyer: c.name, buyerDetails: contractorDetails(c) })
   }
-  // Добавить позицию из номенклатуры новой строкой.
   const addFromGood = (id: string) => {
     const g = goods.find((x) => x.id === id)
     if (!selected || !g) return
     updateDoc(selected.id, { items: [...selected.items, { name: g.name, qty: 1, price: g.price }] })
   }
+
+  // Мини-дебиторка: неоплаченные счета.
+  const unpaid = docs.filter((d) => d.type === 'invoice' && d.paymentStatus !== 'paid')
+  const debitorka = unpaid.reduce((s, d) => s + docTotals(d).subtotal, 0)
+
+  const isInvoice = selected?.type === 'invoice'
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -58,35 +83,43 @@ export function Documents() {
         <div>
           <div className="text-sm text-muted">{activeOrg.name}</div>
           <h1 className="text-2xl font-semibold text-ink">Документы</h1>
-          <p className="mt-1 text-sm text-muted">Счета на оплату и акты. Реквизиты продавца берутся из «Реквизитов».</p>
+          <p className="mt-1 text-sm text-muted">
+            Счета, акты, накладные и УПД. Реквизиты продавца берутся из «Реквизитов».
+          </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => create('invoice')}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
-          >
-            <IconPlus size={16} /> Счёт
-          </button>
-          <button
-            type="button"
-            onClick={() => create('act')}
-            className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
-          >
-            <IconPlus size={16} /> Акт
-          </button>
+        <div className="flex flex-wrap gap-2">
+          {CREATE_BUTTONS.map(({ type, primary }) => (
+            <button
+              key={type}
+              type="button"
+              onClick={() => create(type)}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                primary
+                  ? 'bg-brand-600 text-white hover:bg-brand-700'
+                  : 'border border-line text-ink hover:border-brand-300 hover:bg-brand-50'
+              }`}
+            >
+              <IconPlus size={16} /> {DOC_TYPE_LABEL[type]}
+            </button>
+          ))}
         </div>
       </header>
 
-      <div className="grid gap-5 lg:grid-cols-[260px_1fr]">
+      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         {/* Список документов */}
         <Card title="Документы">
+          {debitorka > 0 && (
+            <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-warn">
+              Не оплачено: {unpaid.length} сч. на {formatRub(debitorka)}
+            </div>
+          )}
           {docs.length === 0 ? (
-            <p className="text-sm text-muted">Пока нет документов. Создайте счёт или акт.</p>
+            <p className="text-sm text-muted">Пока нет документов. Создайте счёт, акт, накладную или УПД.</p>
           ) : (
             <div className="space-y-1">
               {docs.map((d) => {
                 const { subtotal } = docTotals(d)
+                const badge = d.type === 'invoice' ? PAY_BADGE[d.paymentStatus] : null
                 return (
                   <button
                     key={d.id}
@@ -96,8 +129,15 @@ export function Documents() {
                       d.id === selectedId ? 'border-brand-500 bg-brand-50' : 'border-line hover:bg-slate-50'
                     }`}
                   >
-                    <div className="font-medium text-ink">
-                      {d.type === 'invoice' ? 'Счёт' : 'Акт'} № {d.number}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-ink">
+                        {DOC_TYPE_LABEL[d.type]} № {d.number}
+                      </span>
+                      {badge && (
+                        <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${badge.cls}`}>
+                          {badge.label}
+                        </span>
+                      )}
                     </div>
                     <div className="text-xs text-muted">
                       {formatDate(d.date)} · {formatRub(subtotal)}
@@ -112,7 +152,7 @@ export function Documents() {
         {/* Редактор */}
         {selected ? (
           <Card
-            title={`${selected.type === 'invoice' ? 'Счёт' : 'Акт'} № ${selected.number}`}
+            title={`${DOC_TYPE_LABEL[selected.type]} № ${selected.number}`}
             right={
               <div className="flex gap-2">
                 <button
@@ -167,13 +207,33 @@ export function Documents() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={selected.type === 'invoice' ? 'Покупатель' : 'Заказчик'}>
+                <Field label={selected.type === 'act' ? 'Заказчик' : 'Покупатель'}>
                   <input className={inputClass} placeholder="ООО «Ромашка»" value={selected.buyer} onChange={(e) => updateDoc(selected.id, { buyer: e.target.value })} />
                 </Field>
                 <Field label="ИНН / адрес покупателя">
                   <input className={inputClass} placeholder="ИНН 7700000000, г. Москва" value={selected.buyerDetails} onChange={(e) => updateDoc(selected.id, { buyerDetails: e.target.value })} />
                 </Field>
               </div>
+
+              {isInvoice && (
+                <Field label="Статус оплаты">
+                  <select
+                    className={`${inputClass} max-w-[220px]`}
+                    value={selected.paymentStatus}
+                    onChange={(e) => {
+                      const v = e.target.value as PaymentStatus
+                      updateDoc(selected.id, {
+                        paymentStatus: v,
+                        paidDate: v === 'paid' ? new Date().toISOString().slice(0, 10) : undefined,
+                      })
+                    }}
+                  >
+                    <option value="unpaid">Не оплачен</option>
+                    <option value="partial">Частично оплачен</option>
+                    <option value="paid">Оплачен</option>
+                  </select>
+                </Field>
+              )}
 
               {/* Позиции */}
               <div>
@@ -223,11 +283,14 @@ export function Documents() {
       </div>
 
       <div className="mt-5">
-        <Note>Документы хранятся локально в браузере (демо). Реквизиты продавца (ИНН, банк) подтягиваются из раздела «Реквизиты».</Note>
+        <Note>
+          Документы хранятся локально в браузере (демо). Реквизиты продавца (ИНН, банк)
+          подтягиваются из раздела «Реквизиты», итог дублируется суммой прописью в печатной форме.
+        </Note>
       </div>
 
       {printDoc && (
-        <PrintModal title={`${printDoc.type === 'invoice' ? 'Счёт' : 'Акт'} № ${printDoc.number} — предпросмотр`} onClose={() => setPrintId(null)}>
+        <PrintModal title={`${DOC_TYPE_LABEL[printDoc.type]} № ${printDoc.number} — предпросмотр`} onClose={() => setPrintId(null)}>
           <InvoiceDoc org={activeOrg} doc={printDoc} />
         </PrintModal>
       )}

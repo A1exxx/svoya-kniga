@@ -97,7 +97,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
       <header className="mb-6">
-        <h1 className="text-2xl font-semibold text-ink">Реквизиты и настройки</h1>
+        <h1 className="text-2xl font-semibold text-ink">Настройки — параметры налогов</h1>
         <p className="mt-1 text-sm text-muted">
           Параметры налогов по годам. Значения по умолчанию — из ст. 430 НК РФ. Можно
           переопределить (например, региональную ставку) — расчёт сразу обновится.

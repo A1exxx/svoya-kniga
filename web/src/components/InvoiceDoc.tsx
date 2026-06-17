@@ -1,6 +1,7 @@
 import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import { docTotals, type Doc } from '../state/docsStore'
+import { rublesToWords } from '../lib/numberToWords'
 
 const r = (n: number) => formatRub(n, { kopecks: true })
 
@@ -8,11 +9,16 @@ const r = (n: number) => formatRub(n, { kopecks: true })
 export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
   const { subtotal, rate, vat } = docTotals(doc)
   const isInvoice = doc.type === 'invoice'
-  const sellerLabel = isInvoice ? 'Поставщик' : 'Исполнитель'
-  const buyerLabel = isInvoice ? 'Покупатель' : 'Заказчик'
-  const title = isInvoice
-    ? `Счёт на оплату № ${doc.number} от ${formatDate(doc.date)}`
-    : `Акт № ${doc.number} от ${formatDate(doc.date)} выполненных работ (оказанных услуг)`
+  const isAct = doc.type === 'act'
+  const sellerLabel = isAct ? 'Исполнитель' : 'Поставщик'
+  const buyerLabel = isAct ? 'Заказчик' : 'Покупатель'
+  const TITLES: Record<Doc['type'], string> = {
+    invoice: `Счёт на оплату № ${doc.number} от ${formatDate(doc.date)}`,
+    act: `Акт № ${doc.number} от ${formatDate(doc.date)} выполненных работ (оказанных услуг)`,
+    waybill: `Товарная накладная (ТОРГ-12) № ${doc.number} от ${formatDate(doc.date)}`,
+    upd: `Универсальный передаточный документ (УПД) № ${doc.number} от ${formatDate(doc.date)}`,
+  }
+  const title = TITLES[doc.type]
 
   return (
     <div>
@@ -83,6 +89,11 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
         <div className="mt-1 text-sm">
           Всего к оплате: <span className="tnum font-semibold">{r(subtotal)}</span>
         </div>
+      </div>
+
+      <div className="mt-3 text-[12.5px]">
+        Всего наименований {doc.items.length}, на сумму {r(subtotal)}
+        <div className="font-medium">{rublesToWords(subtotal)}</div>
       </div>
 
       {doc.note && <div className="mt-4 text-[12.5px] text-slate-600">{doc.note}</div>}
