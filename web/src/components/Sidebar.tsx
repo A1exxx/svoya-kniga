@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useOrg } from '../state/orgStore'
 import { orgDisplayName, requisitesComplete } from '../lib/orgDisplay'
 import { getTheme, setTheme, type Theme } from '../lib/theme'
@@ -43,6 +43,14 @@ export const NAV = [
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { orgs, activeOrgId, setActiveOrgId, addOrg } = useOrg()
+  const navigate = useNavigate()
+
+  // Добавить ИП и СРАЗУ открыть Реквизиты — куда вносить данные (иначе непонятно, что дальше).
+  const onAddOrg = () => {
+    addOrg()
+    onNavigate?.()
+    navigate('/requisites')
+  }
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-white">
@@ -119,7 +127,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         </div>
         <button
           type="button"
-          onClick={addOrg}
+          onClick={onAddOrg}
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-line px-2.5 py-1.5 text-xs font-medium text-muted transition-colors hover:border-brand-300 hover:text-brand-600"
         >
           <IconPlus size={14} />

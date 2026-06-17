@@ -12,6 +12,8 @@ import {
   listAudit,
   clearAudit,
 } from '../lib/storage/storeAdmin'
+import { getErrorLog, clearErrorLog, buildDiagnostics, APP_VERSION } from '../lib/errorLog'
+import { downloadText } from '../lib/download'
 
 const dt = (iso: string) => {
   try {
@@ -34,6 +36,8 @@ export function Admin() {
   const snapshots = listSnapshots()
   const audit = listAudit()
   const usage = storageUsage()
+  const errors = getErrorLog()
+  const ERR_LABEL: Record<string, string> = { error: 'JS', promise: 'Promise', react: 'Экран', manual: 'Прочее' }
 
   const AUDIT_TYPES = ['ИП', 'Сотрудник', 'Операция', 'Документ', 'Контрагент', 'Номенклатура', 'Снимок', 'копи']
   const filteredAudit = audit.filter((a) => {
@@ -210,6 +214,64 @@ export function Admin() {
             документов, контрагентов и номенклатуры (с разбивкой по изменённым полям), а также снимки,
             откаты и бэкапы. Данные дублируются в IndexedDB — не теряются при очистке localStorage.
             Полная серверная база с синхронизацией — следующий этап (вместе с переносом на сервер).
+          </p>
+        </Card>
+      </div>
+
+      {/* Диагностика и ошибки */}
+      <div className="mt-5">
+        <Card
+          title={`Диагностика и ошибки (${errors.length})`}
+          right={
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => downloadText('svoyakniga-диагностика.json', buildDiagnostics(), 'application/json;charset=utf-8')}
+                className="cursor-pointer text-sm font-medium text-brand-600 hover:text-brand-700"
+              >
+                Скачать диагностику
+              </button>
+              {errors.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => { if (window.confirm('Очистить журнал ошибок?')) { clearErrorLog(); refresh() } }}
+                  className="cursor-pointer text-sm text-slate-400 hover:text-danger"
+                >
+                  Очистить
+                </button>
+              )}
+            </div>
+          }
+        >
+          {errors.length === 0 ? (
+            <p className="text-sm text-muted">
+              Ошибок не зафиксировано. Здесь автоматически появляются сбои приложения (с датой,
+              сообщением и стеком) — чтобы отследить баги. Версия: {APP_VERSION}.
+            </p>
+          ) : (
+            <div className="max-h-72 space-y-1.5 overflow-auto">
+              {errors.map((e) => (
+                <details key={e.id} className="rounded-lg border border-line px-3 py-2 text-sm">
+                  <summary className="cursor-pointer list-none">
+                    <span className="mr-2 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-danger">
+                      {ERR_LABEL[e.kind] ?? e.kind}
+                    </span>
+                    <span className="text-xs text-muted">{dt(e.at)}</span>
+                    {e.where && <span className="ml-2 text-xs text-slate-400">{e.where}</span>}
+                    <div className="mt-0.5 truncate text-ink">{e.message}</div>
+                  </summary>
+                  {e.stack && (
+                    <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-50 p-2 text-[11px] text-slate-600">
+                      {e.stack}
+                    </pre>
+                  )}
+                </details>
+              ))}
+            </div>
+          )}
+          <p className="mt-3 text-xs text-muted">
+            Журнал ошибок хранится локально (последние 50). Если что-то сломалось — нажмите «Скачать
+            диагностику» и пришлите файл: в нём ошибки, версия и браузер, по ним легко найти причину.
           </p>
         </Card>
       </div>

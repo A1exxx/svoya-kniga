@@ -169,6 +169,16 @@ export function Requisites() {
         </div>
       </header>
 
+      {progress.missing.length > 0 && (
+        <div className="mb-5">
+          <Note tone="info">
+            <strong>Начните отсюда.</strong> Заполните данные ИП — они автоматически подставятся во
+            все счета, расчёты и отчёты. Достаточно ИНН и ФИО (можно нажать «Заполнить по&nbsp;ИНН» —
+            остальное подтянется). Всё сохраняется само; по кнопке «Готово» вернётесь к задачам.
+          </Note>
+        </div>
+      )}
+
       <div className="space-y-5">
         <Card title="Организация">
           <div className="grid gap-4 sm:grid-cols-2">
