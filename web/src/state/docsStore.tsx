@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import Decimal from 'decimal.js'
 import { useOrg, type Org } from './orgStore'
 import { calcVatUsn, getParams } from '../lib/taxcore'
 import { persistKey } from '../lib/storage/idb'
@@ -197,10 +198,16 @@ export function useDocs(): DocsCtxValue {
   return ctx
 }
 
-/** Итоги документа: сумма и (в т.ч.) НДС. */
+/** Итоги документа: сумма и (в т.ч.) НДС. Считаем на decimal.js (как остальной денежный код) —
+ *  float-дрейф из qty×price утекал во входной НДС и декларацию. Округление до копеек. */
 export function docTotals(doc: Doc) {
-  const subtotal = doc.items.reduce((s, it) => s + it.qty * it.price, 0)
+  const subtotalD = doc.items.reduce(
+    (s, it) => s.plus(new Decimal(it.qty || 0).times(it.price || 0)),
+    new Decimal(0)
+  )
   const rate = doc.vatMode === 'none' ? 0 : Number(doc.vatMode)
-  const vat = rate > 0 ? subtotal - subtotal / (1 + rate / 100) : 0
-  return { subtotal, rate, vat }
+  const vatD =
+    rate > 0 ? subtotalD.minus(subtotalD.div(new Decimal(1).plus(new Decimal(rate).div(100)))) : new Decimal(0)
+  const round2 = (d: Decimal) => d.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+  return { subtotal: round2(subtotalD), rate, vat: round2(vatD) }
 }

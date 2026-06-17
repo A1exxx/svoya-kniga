@@ -109,29 +109,48 @@ export function Money() {
         setImportMsg(errors.join(' '))
         return
       }
-      // Авто-привязка приходов к неоплаченным исходящим счетам по сумме.
+      // Авто-привязка приходов к неоплаченным исходящим счетам: по сумме И контрагенту.
+      // Если на одну сумму несколько счетов и контрагент не разрешает однозначно — НЕ привязываем
+      // (чтобы не пометить оплаченным чужой счёт), а сообщаем «отметьте вручную».
       const unpaid = docs.filter(
         (x) => x.direction === 'outgoing' && x.type === 'invoice' && x.paymentStatus !== 'paid' && !x.linkedOpId
       )
+      const norm = (s: string) => (s || '').toLowerCase().replace(/["'«».,]/g, '').replace(/\s+/g, ' ').trim()
       const used = new Set<string>()
       let matched = 0
+      let ambiguous = 0
       drafts.forEach((d) => {
         const opId = addOp(d)
         if (d.kind !== 'income') return
-        const inv = unpaid.find((x) => !used.has(x.id) && Math.abs(docTotals(x).subtotal - d.amount) < 0.01)
-        if (inv) {
-          used.add(inv.id)
-          updateDoc(inv.id, { paymentStatus: 'paid', paidDate: d.date, linkedOpId: opId })
+        const byAmount = unpaid.filter((x) => !used.has(x.id) && Math.abs(docTotals(x).subtotal - d.amount) < 0.01)
+        if (byAmount.length === 0) return
+        let pick: (typeof unpaid)[number] | undefined
+        if (byAmount.length === 1) {
+          pick = byAmount[0]
+        } else {
+          const dp = norm(d.counterparty)
+          const byParty = dp
+            ? byAmount.filter((x) => norm(x.buyer).includes(dp) || dp.includes(norm(x.buyer)))
+            : []
+          if (byParty.length === 1) pick = byParty[0]
+        }
+        if (pick) {
+          used.add(pick.id)
+          updateDoc(pick.id, { paymentStatus: 'paid', paidDate: d.date, linkedOpId: opId })
           matched++
+        } else {
+          ambiguous++
         }
       })
       const inc = drafts.filter((d) => d.kind === 'income').length
       setImportMsg(
         `Загружено операций: ${drafts.length} (приход ${inc}, расход ${drafts.length - inc})` +
-          (matched > 0 ? `; привязано к счетам: ${matched} (отмечены оплаченными)` : '') + '.'
+          (matched > 0 ? `; привязано к счетам: ${matched} (отмечены оплаченными)` : '') +
+          (ambiguous > 0 ? `; не привязано (несколько счетов на одну сумму): ${ambiguous} — отметьте вручную` : '') +
+          '.'
       )
     } catch (e) {
-      setImportMsg('Не удалось прочитать файл: ' + (e as Error).message)
+      setImportMsg('Не удалось прочитать файл: ' + String(e instanceof Error ? e.message : e))
     }
   }
 

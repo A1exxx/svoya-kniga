@@ -103,3 +103,31 @@ describe('ndflPeriodEntries — инвариант годовой суммы', (
     expect(entries.filter((e) => e.kind === 'advance').every((e) => e.amount === 0)).toBe(true)
   })
 })
+
+describe('ndflPeriodEntries — КБК на стыке ступеней разбивается верно', () => {
+  // 250 000 × 12 = 3 млн/год: 2,4 млн по 13% (=312 000) + 0,6 млн по 15% (=90 000).
+  const salary = calcSalary(2026, 250_000, { months: 12 })
+  const entries = ndflPeriodEntries(salary)
+  const sumAt = (rate: number) =>
+    entries.filter((e) => e.ratePct === rate).reduce((s, e) => s + e.amount, 0)
+  it('сумма по 13% == 312 000 (не уехала на 15%)', () => {
+    expect(sumAt(13)).toBe(312_000)
+  })
+  it('сумма по 15% == 90 000', () => {
+    expect(sumAt(15)).toBe(90_000)
+  })
+  it('итог по КБК сходится с ndfl_year', () => {
+    expect(sumAt(13) + sumAt(15)).toBe(salary.ndfl_year.toNumber())
+  })
+})
+
+describe('dueDateNdfl — декабрь, 2-я половина = последний рабочий день года', () => {
+  it('2025: 31 декабря — среда (рабочий)', () => {
+    expect(dueDateNdfl(2025, 12, 2)).toBe('2025-12-31')
+  })
+  it('никогда не уезжает в следующий год', () => {
+    for (const y of [2025, 2026, 2027, 2028, 2029, 2030]) {
+      expect(dueDateNdfl(y, 12, 2).startsWith(String(y))).toBe(true)
+    }
+  })
+})

@@ -9,6 +9,8 @@
  * этап (он связан с переносом на сервер). См. docs/STORAGE-AND-AUDIT.md.
  */
 
+import { idbReplaceAll } from './idb'
+
 const PREFIX = 'svoyakniga.'
 const SNAPSHOTS_KEY = 'svoyakniga.snapshots.v1'
 const AUDIT_KEY = 'svoyakniga.audit.v1'
@@ -80,6 +82,15 @@ function fmtVal(v: unknown): string {
   return String(v)
 }
 
+/** JSON.stringify, не бросающий исключение (циклы/несериализуемое → уникальный маркер). */
+function safeStringify(v: unknown): string {
+  try {
+    return JSON.stringify(v) ?? 'undefined'
+  } catch {
+    return '<unserializable:' + String(v) + '>'
+  }
+}
+
 /** Человеческий diff изменённых полей: «оклад 60000→80000; дети 0→1». Картинки/служебные скрываются. */
 export function diffFields(before: object | undefined, patch: object): string {
   const b = (before ?? {}) as Record<string, unknown>
@@ -90,7 +101,8 @@ export function diffFields(before: object | undefined, patch: object): string {
       parts.push(`${k}: изменено`)
       continue
     }
-    if (JSON.stringify(b[k]) === JSON.stringify(p[k])) continue
+    // safeStringify: сравнение значений не должно бросать исключение и срывать мутацию стора.
+    if (safeStringify(b[k]) === safeStringify(p[k])) continue
     parts.push(`${k}: ${fmtVal(b[k])}→${fmtVal(p[k])}`)
   }
   return parts.join('; ')
@@ -149,6 +161,7 @@ export function restoreSnapshot(id: string): boolean {
   // Удаляем текущие data-ключи и пишем сохранённые.
   for (const k of dataKeys()) localStorage.removeItem(k)
   for (const [k, v] of Object.entries(snap.data)) localStorage.setItem(k, v)
+  void idbReplaceAll(captureData()) // зеркало IDB → пост-откатное состояние (иначе вернёт старое)
   logAudit('Откат к снимку', `${snap.label} (${snap.createdAt})`)
   return true
 }
@@ -214,6 +227,7 @@ export function importBackup(json: string, mode: 'replace' | 'merge'): { ok: boo
   for (const [k, v] of Object.entries(backup.data)) {
     if (k.startsWith(PREFIX) && !EXCLUDE.has(k)) localStorage.setItem(k, v)
   }
+  void idbReplaceAll(captureData()) // синхронизируем зеркало IDB с импортированным состоянием
   logAudit('Импорт резервной копии', mode)
   return { ok: true, message: 'Резервная копия загружена. Перезагрузите приложение.' }
 }

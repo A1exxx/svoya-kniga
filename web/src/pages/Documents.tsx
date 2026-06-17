@@ -84,7 +84,8 @@ export function Documents() {
         incomeIncludesVat: true,
         inputVat,
       })
-    } catch {
+    } catch (e) {
+      console.error('[svoyakniga] Ошибка расчёта НДС:', e)
       vatRes = null
     }
   }

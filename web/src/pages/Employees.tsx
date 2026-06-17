@@ -206,7 +206,10 @@ function StaffRoster({ year }: { year: number }) {
                 <Field label="Детей (вычет)">
                   {numInput(selected.children, (n) => up({ children: n }), { max: 10 })}
                 </Field>
-                <label className="flex cursor-pointer items-center gap-2.5 self-end pb-2.5">
+                <label
+                  className="flex cursor-pointer items-center gap-2.5 self-end pb-2.5"
+                  title="Пониженный тариф 15% на выплаты сверх 1,5 МРОТ. С 2026 (ФЗ № 425-ФЗ) — только для субъектов МСП с основным ОКВЭД из перечня приоритетных отраслей; проверьте применимость."
+                >
                   <input
                     type="checkbox"
                     className="h-4 w-4 rounded border-line text-brand-600"
@@ -459,7 +462,10 @@ function SalaryCalc({ year }: { year: number }) {
           </Field>
           <Field label="Детей (для вычета)">{numInput(children, setChildren, { max: 10 })}</Field>
           <Field label="Аванс, %" hint="0 = без разбивки">{numInput(advancePercent, (n) => setAdvancePercent(Math.min(100, n)), { max: 100 })}</Field>
-          <label className="flex cursor-pointer items-center gap-2.5">
+          <label
+            className="flex cursor-pointer items-center gap-2.5"
+            title="Пониженный тариф 15% на выплаты сверх 1,5 МРОТ. С 2026 (ФЗ № 425-ФЗ) — только для субъектов МСП с основным ОКВЭД из перечня приоритетных отраслей; проверьте применимость."
+          >
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-line text-brand-600"

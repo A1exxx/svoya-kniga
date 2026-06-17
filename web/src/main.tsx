@@ -39,12 +39,22 @@ function render() {
   )
 }
 
+// Любое необработанное отклонение промиса — в консоль (не молча), для диагностики.
+window.addEventListener('unhandledrejection', (e) => {
+  console.error('[svoyakniga] Необработанное отклонение промиса:', e.reason)
+})
+
 // Восстанавливаем данные из IndexedDB-зеркала (если localStorage очищали), затем рендерим.
+// Ошибка инициализации НЕ должна оставлять пустой экран — рендерим в любом случае.
 async function boot() {
-  applyTheme() // тема до рендера (без вспышки)
-  await recoverFromIdb()
-  applyOverrides() // локальные правки параметров до первого рендера
-  maybeAutoSnapshot() // автоснимок раз в сутки (защита от потери)
+  try {
+    applyTheme() // тема до рендера (без вспышки)
+    await recoverFromIdb()
+    applyOverrides() // локальные правки параметров до первого рендера
+    maybeAutoSnapshot() // автоснимок раз в сутки (защита от потери)
+  } catch (e) {
+    console.error('[svoyakniga] Ошибка инициализации (приложение всё равно запускается):', e)
+  }
   render()
 }
 

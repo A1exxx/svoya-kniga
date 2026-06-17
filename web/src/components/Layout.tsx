@@ -1,4 +1,4 @@
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Outlet } from 'react-router-dom'
 import { IconHelp, IconMenu } from './icons'
 import { Sidebar } from './Sidebar'
@@ -6,9 +6,30 @@ import { Sidebar } from './Sidebar'
 export function Layout() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  const [storageFull, setStorageFull] = useState(false)
+
+  // Хранилище браузера переполнено — данные критичны, предупреждаем явно (не молча).
+  useEffect(() => {
+    const onErr = () => setStorageFull(true)
+    window.addEventListener('svk:storage-error', onErr)
+    return () => window.removeEventListener('svk:storage-error', onErr)
+  }, [])
 
   return (
     <div className="flex h-full">
+      {storageFull && (
+        <div className="fixed inset-x-0 top-0 z-50 bg-red-600 px-4 py-2 text-center text-sm text-white">
+          Хранилище браузера переполнено — последние данные могли не сохраниться. Откройте
+          «Администрирование» и выгрузите резервную копию, затем удалите старые снимки.
+          <button
+            type="button"
+            onClick={() => setStorageFull(false)}
+            className="ml-3 underline"
+          >
+            скрыть
+          </button>
+        </div>
+      )}
       {/* Боковое меню: на десктопе статично, на узких экранах — выезжающая панель */}
       <div
         className={`fixed inset-y-0 left-0 z-40 h-full transform transition-transform duration-200 md:static md:translate-x-0 ${
