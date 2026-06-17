@@ -7,6 +7,7 @@ import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { KudirDoc } from '../components/KudirDoc'
 import { parse1CClientBankExchange, readBankStatement } from '../lib/bankImport'
+import { downloadCsv } from '../lib/download'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -50,6 +51,23 @@ export function Money() {
   const applyToTaxes = () => {
     updateActiveOrg({ income, expenses: expense })
     setApplied(true)
+  }
+
+  const exportCsv = () => {
+    const rows = yearOps.map((o) => [
+      formatDate(o.date),
+      o.kind === 'income' ? 'Приход' : 'Расход',
+      o.amount,
+      o.counterparty,
+      o.doc,
+      o.note,
+      o.taxable ? 'да' : 'нет',
+    ])
+    downloadCsv(
+      `Операции_${activeOrg.year}.csv`,
+      ['Дата', 'Тип', 'Сумма', 'Контрагент', 'Документ', 'Описание', 'В налоге'],
+      rows
+    )
   }
 
   const fileRef = useRef<HTMLInputElement>(null)
@@ -99,6 +117,13 @@ export function Money() {
             className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
           >
             Загрузить выписку
+          </button>
+          <button
+            type="button"
+            onClick={exportCsv}
+            className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            Экспорт в Excel
           </button>
           <button
             type="button"

@@ -34,7 +34,7 @@ function load(): Store {
 
 interface OpsCtxValue {
   ops: Operation[] // операции активной организации
-  addOp: (op: Omit<Operation, 'id'>) => void
+  addOp: (op: Omit<Operation, 'id'>) => string
   updateOp: (id: string, patch: Partial<Operation>) => void
   removeOp: (id: string) => void
 }
@@ -55,8 +55,11 @@ export function OpsProvider({ children }: { children: ReactNode }) {
 
   const ops = store[activeOrgId] ?? []
 
-  const addOp = (op: Omit<Operation, 'id'>) =>
-    setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), { ...op, id: makeId() }] }))
+  const addOp = (op: Omit<Operation, 'id'>): string => {
+    const id = makeId()
+    setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), { ...op, id }] }))
+    return id
+  }
 
   const updateOp = (id: string, patch: Partial<Operation>) =>
     setStore((s) => ({

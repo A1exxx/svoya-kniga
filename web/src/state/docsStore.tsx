@@ -31,6 +31,7 @@ export interface Doc {
   note: string
   paymentStatus: PaymentStatus
   paidDate?: string // YYYY-MM-DD
+  linkedOpId?: string // id операции в «Деньгах», созданной при отметке «оплачен»
 }
 
 const KEY = 'svoyakniga.docs.v1'

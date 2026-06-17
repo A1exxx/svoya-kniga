@@ -11,6 +11,7 @@ import {
 } from '../state/docsStore'
 import { contractorDetails, useContractors } from '../state/contractorsStore'
 import { useGoods } from '../state/goodsStore'
+import { useOps } from '../state/opsStore'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
@@ -45,6 +46,7 @@ export function Documents() {
   const { docs, addDoc, updateDoc, removeDoc } = useDocs()
   const { contractors } = useContractors()
   const { goods } = useGoods()
+  const { addOp, removeOp } = useOps()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
 
@@ -71,6 +73,31 @@ export function Documents() {
     const g = goods.find((x) => x.id === id)
     if (!selected || !g) return
     updateDoc(selected.id, { items: [...selected.items, { name: g.name, qty: 1, price: g.price }] })
+  }
+
+  // Смена статуса оплаты: «Оплачен» → создаёт поступление в «Деньгах»; снятие — удаляет его.
+  const onStatusChange = (v: PaymentStatus) => {
+    if (!selected) return
+    const today = new Date().toISOString().slice(0, 10)
+    const patch: Partial<typeof selected> = {
+      paymentStatus: v,
+      paidDate: v === 'paid' ? today : undefined,
+    }
+    if (v === 'paid' && !selected.linkedOpId) {
+      patch.linkedOpId = addOp({
+        date: selected.date || today,
+        kind: 'income',
+        amount: docTotals(selected).subtotal,
+        counterparty: selected.buyer,
+        doc: `Счёт № ${selected.number}`,
+        note: 'оплата по счёту',
+        taxable: true,
+      })
+    } else if (v !== 'paid' && selected.linkedOpId) {
+      removeOp(selected.linkedOpId)
+      patch.linkedOpId = undefined
+    }
+    updateDoc(selected.id, patch)
   }
 
   // Мини-дебиторка: неоплаченные счета.
@@ -218,17 +245,14 @@ export function Documents() {
               </div>
 
               {isInvoice && (
-                <Field label="Статус оплаты">
+                <Field
+                  label="Статус оплаты"
+                  hint="при «Оплачен» создаётся поступление в «Деньгах» — попадёт в КУДиР и расчёт налога"
+                >
                   <select
                     className={`${inputClass} max-w-[220px]`}
                     value={selected.paymentStatus}
-                    onChange={(e) => {
-                      const v = e.target.value as PaymentStatus
-                      updateDoc(selected.id, {
-                        paymentStatus: v,
-                        paidDate: v === 'paid' ? new Date().toISOString().slice(0, 10) : undefined,
-                      })
-                    }}
+                    onChange={(e) => onStatusChange(e.target.value as PaymentStatus)}
                   >
                     <option value="unpaid">Не оплачен</option>
                     <option value="partial">Частично оплачен</option>
