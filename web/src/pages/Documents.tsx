@@ -16,6 +16,7 @@ import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { InvoiceDoc } from '../components/InvoiceDoc'
+import { ContractDoc } from '../components/ContractDoc'
 
 const VAT_OPTIONS: { value: VatMode; label: string }[] = [
   { value: 'none', label: 'Без НДС' },
@@ -36,6 +37,7 @@ const CREATE_BUTTONS: { type: DocType; primary?: boolean }[] = [
   { type: 'act' },
   { type: 'waybill' },
   { type: 'upd' },
+  { type: 'contract' },
 ]
 
 export function Documents() {
@@ -207,7 +209,7 @@ export function Documents() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={selected.type === 'act' ? 'Заказчик' : 'Покупатель'}>
+                <Field label={selected.type === 'act' || selected.type === 'contract' ? 'Заказчик' : 'Покупатель'}>
                   <input className={inputClass} placeholder="ООО «Ромашка»" value={selected.buyer} onChange={(e) => updateDoc(selected.id, { buyer: e.target.value })} />
                 </Field>
                 <Field label="ИНН / адрес покупателя">
@@ -291,7 +293,11 @@ export function Documents() {
 
       {printDoc && (
         <PrintModal title={`${DOC_TYPE_LABEL[printDoc.type]} № ${printDoc.number} — предпросмотр`} onClose={() => setPrintId(null)}>
-          <InvoiceDoc org={activeOrg} doc={printDoc} />
+          {printDoc.type === 'contract' ? (
+            <ContractDoc org={activeOrg} doc={printDoc} />
+          ) : (
+            <InvoiceDoc org={activeOrg} doc={printDoc} />
+          )}
         </PrintModal>
       )}
     </div>

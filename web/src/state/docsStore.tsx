@@ -7,7 +7,7 @@ export interface DocItem {
   price: number
 }
 
-export type DocType = 'invoice' | 'act' | 'waybill' | 'upd'
+export type DocType = 'invoice' | 'act' | 'waybill' | 'upd' | 'contract'
 export type VatMode = 'none' | '5' | '7' | '10' | '20'
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
@@ -16,6 +16,7 @@ export const DOC_TYPE_LABEL: Record<DocType, string> = {
   act: 'Акт',
   waybill: 'Накладная',
   upd: 'УПД',
+  contract: 'Договор',
 }
 
 export interface Doc {

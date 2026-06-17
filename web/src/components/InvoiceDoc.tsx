@@ -17,6 +17,7 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
     act: `Акт № ${doc.number} от ${formatDate(doc.date)} выполненных работ (оказанных услуг)`,
     waybill: `Товарная накладная (ТОРГ-12) № ${doc.number} от ${formatDate(doc.date)}`,
     upd: `Универсальный передаточный документ (УПД) № ${doc.number} от ${formatDate(doc.date)}`,
+    contract: `Договор № ${doc.number} от ${formatDate(doc.date)}`,
   }
   const title = TITLES[doc.type]
 

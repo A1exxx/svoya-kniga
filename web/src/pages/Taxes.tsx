@@ -51,9 +51,15 @@ export function Taxes() {
 
   const isIncome = o.usnObject === 'income'
 
+  // Доход для НДС: из операций (поквартальный режим) или ручной — согласовано с расчётом УСН.
+  const vatIncome =
+    computed && computed.quarterly
+      ? computed.byQuarter.reduce((s, q) => s + q.income, 0)
+      : o.income
+
   let vatRes: ReturnType<typeof calcVatUsn> | null = null
   try {
-    vatRes = calcVatUsn(o.year, o.income, { mode: vatMode })
+    vatRes = calcVatUsn(o.year, vatIncome, { mode: vatMode })
   } catch {
     vatRes = null
   }
@@ -311,7 +317,7 @@ export function Taxes() {
                   </Note>
                 ) : vatRes && vatRes.exempt ? (
                   <Note>
-                    Освобождён от НДС: годовой доход {formatRub(o.income)} ≤ 60 млн ₽ (ст. 145 НК РФ).
+                    Освобождён от НДС: годовой доход {formatRub(vatIncome)} ≤ 60 млн ₽ (ст. 145 НК РФ).
                     Большинству ИП на УСН НДС платить не нужно.
                   </Note>
                 ) : vatRes ? (
