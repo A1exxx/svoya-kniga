@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useOrg } from '../state/orgStore'
 import { orgDisplayName, requisitesComplete } from '../lib/orgDisplay'
+import { getTheme, setTheme, type Theme } from '../lib/theme'
 import {
   IconBuilding,
   IconAlert,
@@ -123,7 +125,37 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <IconPlus size={14} />
           Добавить ИП
         </button>
+        <ThemeToggle />
       </div>
     </aside>
+  )
+}
+
+function ThemeToggle() {
+  const [theme, setLocal] = useState<Theme>(getTheme())
+  const pick = (t: Theme) => {
+    setTheme(t)
+    setLocal(t)
+  }
+  const opts: [Theme, string][] = [
+    ['light', 'Свет'],
+    ['dark', 'Тьма'],
+    ['system', 'Авто'],
+  ]
+  return (
+    <div className="mt-1 inline-flex w-full rounded-lg border border-line p-0.5">
+      {opts.map(([val, label]) => (
+        <button
+          key={val}
+          type="button"
+          onClick={() => pick(val)}
+          className={`flex-1 cursor-pointer rounded-md px-2 py-1 text-[11px] font-medium transition-colors ${
+            theme === val ? 'bg-brand-600 text-white' : 'text-muted hover:text-ink'
+          }`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
   )
 }

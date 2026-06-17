@@ -28,6 +28,40 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* ===== Тёмная тема (класс .dark на <html>) =====
+   Переопределяем используемые утилиты — приложение не строилось под dark,
+   но так оно полностью перекрашивается без правки каждого компонента. */
+html.dark {
+  color-scheme: dark;
+}
+html.dark body {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+.dark .bg-white { background-color: #1e293b !important; }
+.dark .bg-canvas { background-color: #0f172a; }
+.dark .bg-slate-50, .dark .bg-slate-50\/60, .dark .hover\:bg-slate-50:hover { background-color: #1e293b; }
+.dark .bg-slate-100 { background-color: #334155; }
+.dark .text-ink { color: #e2e8f0; }
+.dark .text-muted { color: #94a3b8; }
+.dark .text-slate-700 { color: #cbd5e1; }
+.dark .text-slate-600 { color: #b4c0d0; }
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .text-slate-400 { color: #8595a8; }
+.dark .text-slate-300 { color: #64748b; }
+.dark .border-line { border-color: #334155; }
+.dark .border-slate-200 { border-color: #334155; }
+.dark .border-slate-300 { border-color: #475569; }
+.dark .bg-brand-50 { background-color: rgba(37, 99, 235, 0.18); }
+.dark .hover\:bg-brand-50:hover { background-color: rgba(37, 99, 235, 0.22); }
+.dark .bg-amber-50 { background-color: rgba(217, 119, 6, 0.18); }
+.dark .bg-green-50 { background-color: rgba(22, 163, 74, 0.18); }
+.dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.18); }
+.dark .text-brand-600 { color: #93b4fd; }
+.dark .shadow-card { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
+/* Печатные документы всегда на белом фоне с тёмным текстом (для печати/PDF). */
+.dark .print-doc { background-color: #ffffff; color: #0f172a; }
+
 /* Печать: показываем только документ .print-doc */
 @media print {
   body * {

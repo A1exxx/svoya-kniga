@@ -13,6 +13,7 @@ import { TaxOfficeProvider } from './state/taxOfficeStore'
 import { applyOverrides } from './state/paramsStore'
 import { maybeAutoSnapshot } from './lib/storage/storeAdmin'
 import { recoverFromIdb } from './lib/storage/idb'
+import { applyTheme } from './lib/theme'
 
 function render() {
   createRoot(document.getElementById('root')!).render(
@@ -40,6 +41,7 @@ function render() {
 
 // Восстанавливаем данные из IndexedDB-зеркала (если localStorage очищали), затем рендерим.
 async function boot() {
+  applyTheme() // тема до рендера (без вспышки)
   await recoverFromIdb()
   applyOverrides() // локальные правки параметров до первого рендера
   maybeAutoSnapshot() // автоснимок раз в сутки (защита от потери)
