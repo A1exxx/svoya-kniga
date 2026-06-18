@@ -19,15 +19,30 @@ export const REPORT_TITLE: Record<ReportType, string> = {
 
 const r2 = (n: number) => formatRub(Math.round(n))
 
-function Head({ org, title, knd }: { org: Org; title: string; knd?: string }) {
+/** Общий титульный блок отчёта (корректировка/период/год/налоговый орган/налогоплательщик). */
+function RepTitul({ org, noTaxOffice }: { org: Org; noTaxOffice?: boolean }) {
   return (
-    <div className="text-center">
-      <div className="text-base font-semibold">{title}</div>
-      {knd && <div className="mt-1 text-xs text-slate-500">Форма по КНД {knd}</div>}
-      <div className="mt-2 text-[13px] text-slate-600">
-        {org.fio || org.name || '—'}
-        {org.inn && `, ИНН ${org.inn}`} · период {org.year}
-      </div>
+    <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+      <FormField label="Номер корректировки">
+        <Cells value="0" count={3} />
+      </FormField>
+      <FormField label="Расчётный (отчётный) период (код)">
+        <Cells count={2} />
+      </FormField>
+      <FormField label="Календарный год">
+        <Cells value={String(org.year)} count={4} />
+      </FormField>
+      {!noTaxOffice && (
+        <FormField label="Представляется в налоговый орган (код)">
+          <Cells value={org.taxOfficeCode} count={4} />
+        </FormField>
+      )}
+      <FormField label="Налогоплательщик">
+        <span className="text-[12px]">{org.fio || org.name || '—'}</span>
+      </FormField>
+      <FormField label="ОКВЭД">
+        <span className="text-[12px]">{org.okved || '—'}</span>
+      </FormField>
     </div>
   )
 }
@@ -59,8 +74,15 @@ export function PayrollReportDoc({
   if (type === '6ndfl') {
     return (
       <div>
-        <Head org={org} title="Расчёт сумм налога на доходы физических лиц (6-НДФЛ)" knd="1151100" />
-        <div className="mt-5 mb-2 font-semibold">Раздел 2. Обобщённые показатели (за год)</div>
+        <FormKndHeader
+          knd="1151100"
+          title="Расчёт сумм налога на доходы физических лиц, исчисленных и удержанных налоговым агентом (6-НДФЛ)"
+          inn={org.inn}
+        />
+        <RepTitul org={org} />
+        <div className="mt-5 mb-2 text-[12px] font-semibold">
+          Раздел 2. Расчёт исчисленных, удержанных сумм НДФЛ (за год)
+        </div>
         <table className="w-full text-[13px]">
           <tbody>
             <L code="120" label="Количество физических лиц, получивших доход" value={String(n)} />
@@ -69,7 +91,8 @@ export function PayrollReportDoc({
             <L code="160" label="Сумма удержанного налога" value={r2(totals.ndflYear)} />
           </tbody>
         </table>
-        <Note2 />
+        <SignBlock name={org.fio || org.name} />
+        <OfficialNote extra="6-НДФЛ подаётся ежеквартально нарастающим итогом." />
       </div>
     )
   }
@@ -78,8 +101,11 @@ export function PayrollReportDoc({
     const base = totals.grossYear
     return (
       <div>
-        <Head org={org} title="Расчёт по страховым взносам (РСВ)" knd="1151111" />
-        <div className="mt-5 mb-2 font-semibold">Сводные данные по взносам (за год)</div>
+        <FormKndHeader knd="1151111" title="Расчёт по страховым взносам (РСВ)" inn={org.inn} />
+        <RepTitul org={org} />
+        <div className="mt-5 mb-2 text-[12px] font-semibold">
+          Раздел 1. Сводные данные об обязательствах плательщика (за год)
+        </div>
         <table className="w-full text-[13px]">
           <tbody>
             <L code="010" label="Количество застрахованных лиц" value={String(n)} />
@@ -92,7 +118,8 @@ export function PayrollReportDoc({
           Единый тариф 30% до предельной базы и 15,1% сверх; для МСП — 15% с части выплаты свыше
           1,5 МРОТ. Взносы на травматизм отражаются в ЕФС-1 (раздел 2).
         </p>
-        <Note2 />
+        <SignBlock name={org.fio || org.name} />
+        <OfficialNote extra="РСВ подаётся ежеквартально нарастающим итогом." />
       </div>
     )
   }
@@ -100,8 +127,15 @@ export function PayrollReportDoc({
   if (type === 'efs1') {
     return (
       <div>
-        <Head org={org} title="Единая форма сведений (ЕФС-1) — в СФР" />
-        <div className="mt-5 mb-2 font-semibold">Подраздел 1.1. Сведения о трудовой деятельности</div>
+        <FormKndHeader
+          title="Единая форма сведений (ЕФС-1)"
+          subtitle="Представляется в Социальный фонд России (СФР)"
+          inn={org.inn}
+        />
+        <RepTitul org={org} noTaxOffice />
+        <div className="mt-5 mb-2 text-[12px] font-semibold">
+          Подраздел 1.1. Сведения о трудовой (иной) деятельности
+        </div>
         <table className="w-full border-collapse text-[12.5px]">
           <thead>
             <tr className="border-y border-slate-300 text-left">
@@ -122,13 +156,16 @@ export function PayrollReportDoc({
             ))}
           </tbody>
         </table>
-        <div className="mt-4 mb-2 font-semibold">Раздел 2. Взносы на травматизм (за год)</div>
+        <div className="mt-4 mb-2 text-[12px] font-semibold">
+          Раздел 2. Сведения о взносах на травматизм (за год)
+        </div>
         <table className="w-full text-[13px]">
           <tbody>
-            <L code="—" label="Сумма взносов на травматизм" value={r2(totals.travmYear)} />
+            <L code="—" label="Сумма взносов на страхование от несчастных случаев" value={r2(totals.travmYear)} />
           </tbody>
         </table>
-        <Note2 />
+        <SignBlock name={org.fio || org.name} />
+        <OfficialNote extra="ЕФС-1 представляется в СФР (бывшие СЗВ-ТД, 4-ФСС, СЗВ-СТАЖ)." />
       </div>
     )
   }
@@ -215,11 +252,3 @@ export function PayrollReportDoc({
   )
 }
 
-function Note2() {
-  return (
-    <div className="mt-6 text-[11px] text-slate-400">
-      Предпросмотр (демо). Форма заполнена автоматически из штата сотрудников по выверенным
-      параметрам года. Перед подачей сверьте с бухгалтером и официальной формой ФНС.
-    </div>
-  )
-}

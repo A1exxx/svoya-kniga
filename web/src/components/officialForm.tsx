@@ -38,12 +38,14 @@ export function Cells({
 export function FormKndHeader({
   knd,
   title,
+  subtitle,
   page = '001',
   inn,
   kpp,
 }: {
-  knd: string
+  knd?: string
   title: string
+  subtitle?: string
   page?: string
   inn?: string
   kpp?: string
@@ -69,8 +71,9 @@ export function FormKndHeader({
         </div>
       </div>
       <div className="mt-2 text-center">
-        <div className="text-[11px] text-slate-500">Форма по КНД {knd}</div>
+        {knd && <div className="text-[11px] text-slate-500">Форма по КНД {knd}</div>}
         <div className="text-sm font-semibold leading-snug">{title}</div>
+        {subtitle && <div className="text-[11px] text-slate-500">{subtitle}</div>}
       </div>
     </div>
   )
