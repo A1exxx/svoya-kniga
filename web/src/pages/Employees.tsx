@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useOrg, type Org } from '../state/orgStore'
-import { useEmployees, type Employee } from '../state/employeesStore'
+import {
+  useEmployees,
+  type Employee,
+  type VacationType,
+  type VacationEvent,
+} from '../state/employeesStore'
+import { periodDays, accruedVacationDays } from '../lib/vacation'
+import { VacationOrderDoc } from '../components/employee/EmployeeDocs'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation } from '../lib/taxcore'
-import { formatRub } from '../lib/format'
+import { formatRub, formatDate } from '../lib/format'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
 import { sickBases, vacationBase12m } from '../lib/earnings'
 import { payrollSummary, employeeSalaryOptions } from '../lib/payrollSummary'
@@ -37,8 +44,8 @@ function effectiveStazhYears(e: Employee): number {
 const TABS = [
   { key: 'staff', label: 'Штат' },
   { key: 'salary', label: 'Зарплата' },
-  { key: 'vacation', label: 'Отпускные' },
-  { key: 'sick', label: 'Больничные' },
+  { key: 'vacation', label: 'Отпуск' },
+  { key: 'sick', label: 'Больничный / Пособия' },
   { key: 'alimony', label: 'Алименты' },
   { key: 'summary', label: 'Сводка по штату' },
   { key: 'reports', label: 'Отчёты' },
@@ -578,71 +585,156 @@ function SalaryCalc({ year }: { year: number }) {
   )
 }
 
-// ---- Отпускные ----
-function VacationCalc({ year }: { year: number }) {
-  const { employees } = useEmployees()
-  const [selId, setSelId] = useState('')
-  const [base, setBase] = useState(960_000)
-  const [days, setDays] = useState(28)
+// ---- Отпуск (события: период + вид) ----
+const VACATION_TYPE_LABEL: Record<VacationType, string> = {
+  regular: 'Очередной (оплачиваемый)',
+  childcare: 'По уходу за ребёнком',
+  unpaid: 'Без сохранения зарплаты',
+}
 
-  const pick = (e: Employee | null) => {
-    setSelId(e?.id ?? '')
-    if (e) {
-      const b = vacationBase12m(e.earningsByYear, year)
-      setBase(b > 0 ? b : e.salary * 12)
-    }
-  }
-
-  let r: ReturnType<typeof calcVacation> | null = null
+function newId(prefix: string): string {
   try {
-    r = calcVacation(year, base, days)
+    return crypto.randomUUID()
   } catch {
-    r = null
+    return prefix + '-' + Math.floor(performance.now() * 1000).toString(36)
   }
+}
+
+function VacationCalc({ year }: { year: number }) {
+  const { activeOrg } = useOrg()
+  const { employees, updateEmployee } = useEmployees()
+  const [selId, setSelId] = useState('')
+  const [vtype, setVtype] = useState<VacationType>('regular')
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
+  const [order, setOrder] = useState<VacationEvent | null>(null)
+
+  const emp = employees.find((e) => e.id === selId) ?? null
+  const base = emp ? vacationBase12m(emp.earningsByYear, year) || emp.salary * 12 : 0
+  const days = periodDays(from, to)
+  const usedRegular = (emp?.vacations ?? [])
+    .filter((v) => v.type === 'regular')
+    .reduce((s, v) => s + periodDays(v.from, v.to), 0)
+  const accrued = emp?.hireDate ? accruedVacationDays(emp.hireDate, new Date(), usedRegular) : null
+
+  let calc: ReturnType<typeof calcVacation> | null = null
+  try {
+    calc = vtype === 'regular' && days > 0 ? calcVacation(year, base, days) : null
+  } catch {
+    calc = null
+  }
+
+  const addVacation = () => {
+    if (!emp || !from || !to || days <= 0) return
+    updateEmployee(emp.id, { vacations: [...(emp.vacations ?? []), { id: newId('v'), from, to, type: vtype }] })
+    setFrom('')
+    setTo('')
+  }
+  const removeVacation = (id: string) => {
+    if (emp) updateEmployee(emp.id, { vacations: (emp.vacations ?? []).filter((v) => v.id !== id) })
+  }
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
-      <Card title="Параметры">
+    <div className="space-y-5">
+      <Card title="Отпуск сотрудника">
         <div className="space-y-4">
-          <EmployeePicker employees={employees} value={selId} onPick={pick} />
-          <Field label="Заработок за 12 месяцев" hint={formatRub(base)}>{numInput(base, setBase)}</Field>
-          <Field label="Дней отпуска">{numInput(days, setDays, { max: 60 })}</Field>
+          <EmployeePicker employees={employees} value={selId} onPick={(e) => setSelId(e?.id ?? '')} />
+          {emp && accrued != null && (
+            <Note>
+              Накоплено дней отпуска: <b>{accrued}</b> (28 дн/год с даты приёма за вычетом
+              использованных {usedRegular}).
+            </Note>
+          )}
+          {emp ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-4">
+                <Field label="Вид отпуска">
+                  <select className={inputClass} value={vtype} onChange={(e) => setVtype(e.target.value as VacationType)}>
+                    {(Object.keys(VACATION_TYPE_LABEL) as VacationType[]).map((t) => (
+                      <option key={t} value={t}>{VACATION_TYPE_LABEL[t]}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="С"><input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+                <Field label="По"><input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+                <Field label="Дней"><input className={inputClass} readOnly value={days || ''} /></Field>
+              </div>
+              {calc && (
+                <Note>
+                  Отпускные за {days} дн.: начислено {dec(calc.gross)}, НДФЛ {dec(calc.ndfl)}, на руки{' '}
+                  <b>{dec(calc.net)}</b> (СДЗ {dec(calc.avg_daily)} = {formatRub(base)} ÷ 12 ÷ 29,3).
+                </Note>
+              )}
+              {vtype === 'unpaid' && days > 0 && (
+                <Note tone="warn">Без сохранения зарплаты: отпускные не начисляются, зарплата за эти дни уменьшается.</Note>
+              )}
+              {vtype === 'childcare' && days > 0 && (
+                <Note>Отпуск по уходу за ребёнком: оклад не начисляется (пособие — через СФР, серверный этап).</Note>
+              )}
+              <button
+                type="button"
+                onClick={addVacation}
+                disabled={!from || !to || days <= 0}
+                className="cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+              >
+                Добавить отпуск
+              </button>
+            </>
+          ) : (
+            <Note>Выберите сотрудника, чтобы оформить отпуск.</Note>
+          )}
         </div>
       </Card>
-      {r && (
-        <div className="space-y-5">
-          <Card>
-            <div className="text-sm text-muted">Отпускные на руки</div>
-            <div className="tnum mt-1 text-3xl font-semibold text-ink">{dec(r.net)}</div>
-          </Card>
-          <Card title="Как посчитано">
-            <Row label="Среднедневной заработок" hint="база ÷ 12 ÷ 29,3" value={dec(r.avg_daily)} />
-            <Row label={`Отпускные (× ${days} дн.)`} value={dec(r.gross)} strong />
-            <Row
-              label="− НДФЛ"
-              hint={r.gross.toNumber() > 0 ? pct(r.ndfl.div(r.gross)) : 'прогрессия от выплаты'}
-              value={dec(r.ndfl)}
-            />
-            <Row label="= На руки" value={dec(r.net)} strong />
-          </Card>
-          {r.notes.map((n, i) => (
-            <Note key={i}>{n}</Note>
-          ))}
-        </div>
+
+      {emp && (emp.vacations?.length ?? 0) > 0 && (
+        <Card title="Оформленные отпуска">
+          <div className="space-y-1.5">
+            {(emp.vacations ?? []).map((v) => {
+              const d = periodDays(v.from, v.to)
+              let c: ReturnType<typeof calcVacation> | null = null
+              if (v.type === 'regular') {
+                try {
+                  c = calcVacation(year, base, d)
+                } catch {
+                  c = null
+                }
+              }
+              return (
+                <div key={v.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm">
+                  <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-muted">
+                    {VACATION_TYPE_LABEL[v.type]}
+                  </span>
+                  <span className="text-ink">{formatDate(v.from)} — {formatDate(v.to)} · {d} дн.</span>
+                  {c && <span className="tnum text-muted">отпускные {dec(c.net)}</span>}
+                  <button type="button" onClick={() => setOrder(v)} className="ml-auto cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs text-ink hover:border-brand-300 hover:bg-brand-50">Приказ</button>
+                  <button type="button" onClick={() => removeVacation(v.id)} className="cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs text-slate-400 hover:text-danger">Удалить</button>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
+      {order && emp && (
+        <PrintModal title="Приказ на отпуск" onClose={() => setOrder(null)}>
+          <VacationOrderDoc org={activeOrg} employee={emp} vacation={order} />
+        </PrintModal>
       )}
     </div>
   )
 }
 
-// ---- Больничные ----
+// ---- Больничный / Пособия (события: период) ----
 function SickCalc({ year }: { year: number }) {
-  const { employees } = useEmployees()
+  const { employees, updateEmployee } = useEmployees()
   const [selId, setSelId] = useState('')
   const [e1, setE1] = useState(800_000)
   const [e2, setE2] = useState(750_000)
   const [stazh, setStazh] = useState(7)
-  const [days, setDays] = useState(7)
-  const [month, setMonth] = useState(1)
+  const [from, setFrom] = useState('')
+  const [to, setTo] = useState('')
 
+  const emp = employees.find((e) => e.id === selId) ?? null
   const pick = (e: Employee | null) => {
     setSelId(e?.id ?? '')
     if (e) {
@@ -653,33 +745,55 @@ function SickCalc({ year }: { year: number }) {
     }
   }
 
+  const days = periodDays(from, to)
+  const month = from ? Number(from.slice(5, 7)) : 1
+
   let r: ReturnType<typeof calcSickLeave> | null = null
   try {
-    r = calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month))
+    r = days > 0 ? calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month)) : null
   } catch {
     r = null
   }
+
+  const addSick = () => {
+    if (!emp || !from || !to || days <= 0) return
+    updateEmployee(emp.id, { sickLeaves: [...(emp.sickLeaves ?? []), { id: newId('s'), from, to }] })
+    setFrom('')
+    setTo('')
+  }
+  const removeSick = (id: string) => {
+    if (emp) updateEmployee(emp.id, { sickLeaves: (emp.sickLeaves ?? []).filter((s) => s.id !== id) })
+  }
+
   return (
-    <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
-      <Card title="Параметры">
-        <div className="space-y-4">
-          <EmployeePicker employees={employees} value={selId} onPick={pick} />
-          <Field label={`Заработок за ${year - 1} год`} hint={formatRub(e1)}>{numInput(e1, setE1)}</Field>
-          <Field label={`Заработок за ${year - 2} год`} hint={formatRub(e2)}>{numInput(e2, setE2)}</Field>
-          <Field label="Стаж, лет">{numInput(stazh, setStazh, { max: 60 })}</Field>
-          <Field label="Месяц болезни" hint="влияет на минимум по МРОТ (дней в месяце)">
-            <select className={inputClass} value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-              {MONTH_NAMES.map((nm, i) => (
-                <option key={i} value={i + 1}>
-                  {nm} ({daysInMonth(year, i + 1)} дн.)
-                </option>
-              ))}
-            </select>
-          </Field>
-          <Field label="Дней болезни">{numInput(days, setDays, { max: 365 })}</Field>
-        </div>
-      </Card>
-      {r && (
+    <div className="space-y-5">
+      <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
+        <Card title="Параметры">
+          <div className="space-y-4">
+            <EmployeePicker employees={employees} value={selId} onPick={pick} />
+            <Field label={`Заработок за ${year - 1} год`} hint={formatRub(e1)}>{numInput(e1, setE1)}</Field>
+            <Field label={`Заработок за ${year - 2} год`} hint={formatRub(e2)}>{numInput(e2, setE2)}</Field>
+            <Field label="Стаж, лет">{numInput(stazh, setStazh, { max: 60 })}</Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Болел с"><input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
+              <Field label="по"><input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} /></Field>
+            </div>
+            <div className="text-xs text-muted">Дней болезни: <b>{days || '—'}</b></div>
+            {emp && (
+              <button
+                type="button"
+                onClick={addSick}
+                disabled={!from || !to || days <= 0}
+                className="cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:opacity-50"
+              >
+                Добавить больничный
+              </button>
+            )}
+          </div>
+        </Card>
+        {!r ? (
+          <Card><Note>Выберите сотрудника и укажите период болезни (с — по), чтобы рассчитать пособие.</Note></Card>
+        ) : (
         <div className="space-y-5">
           <Card>
             <div className="text-sm text-muted">Пособие на руки</div>
@@ -709,6 +823,23 @@ function SickCalc({ year }: { year: number }) {
             за год) — итог за год сверяется бухгалтером.
           </Note>
         </div>
+        )}
+      </div>
+
+      {emp && (emp.sickLeaves?.length ?? 0) > 0 && (
+        <Card title="Оформленные больничные">
+          <div className="space-y-1.5">
+            {(emp.sickLeaves ?? []).map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-line px-3 py-2 text-sm">
+                <span className="text-ink">{formatDate(s.from)} — {formatDate(s.to)} · {periodDays(s.from, s.to)} дн.</span>
+                <button type="button" onClick={() => removeSick(s.id)} className="ml-auto cursor-pointer rounded-lg border border-line px-2.5 py-1 text-xs text-slate-400 hover:text-danger">Удалить</button>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3">
+            <Note>Взаимодействие с СФР/ФСС (оформление, выплата пособия) — серверный этап.</Note>
+          </div>
+        </Card>
       )}
     </div>
   )

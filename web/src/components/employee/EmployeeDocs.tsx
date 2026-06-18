@@ -2,8 +2,9 @@ import { calcSalary } from '../../lib/taxcore'
 import { formatRub, formatDate } from '../../lib/format'
 import { employeeSalaryOptions } from '../../lib/payrollSummary'
 import { computeStazh, formatStazh } from '../../lib/stazh'
+import { periodDays } from '../../lib/vacation'
 import type { Org } from '../../state/orgStore'
-import type { Employee } from '../../state/employeesStore'
+import type { Employee, VacationEvent, VacationType } from '../../state/employeesStore'
 
 const today = () => new Date().toISOString().slice(0, 10)
 const r0 = (n: number) => formatRub(Math.round(n))
@@ -256,6 +257,49 @@ export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee 
       <div className="mt-8 text-[13px]">
         Выдал: ______________ / {employer(org)}
         <div className="mt-4">Получил: ______________ / {e.fio || '________'}</div>
+      </div>
+      <DocFooter />
+    </div>
+  )
+}
+
+const VAC_TYPE_TEXT: Record<VacationType, string> = {
+  regular: 'ежегодный оплачиваемый отпуск',
+  childcare: 'отпуск по уходу за ребёнком',
+  unpaid: 'отпуск без сохранения заработной платы',
+}
+
+/** Приказ о предоставлении отпуска работнику (упрощённый аналог Т-6). */
+export function VacationOrderDoc({
+  org,
+  employee: e,
+  vacation: v,
+}: {
+  org: Org
+  employee: Employee
+  vacation: VacationEvent
+}) {
+  const days = periodDays(v.from, v.to)
+  return (
+    <div>
+      <div className="text-center text-base font-semibold">
+        Приказ (распоряжение) о предоставлении отпуска работнику
+      </div>
+      <div className="mt-1 text-center text-xs text-slate-500">
+        {employer(org)}{org.inn && `, ИНН ${org.inn}`}
+      </div>
+      <div className="mt-2 text-center text-[13px]">№ ______ от {formatDate(today())}</div>
+      <div className="mt-6 space-y-3 text-[13px] leading-relaxed">
+        <p>
+          Предоставить <span className="font-medium">{e.fio || '________________'}</span>
+          {e.position && <> ({e.position})</>} {VAC_TYPE_TEXT[v.type]} на{' '}
+          <span className="font-medium">{days}</span> календарных дней с{' '}
+          {v.from ? formatDate(v.from) : '__________'} по {v.to ? formatDate(v.to) : '__________'}.
+        </p>
+      </div>
+      <div className="mt-10 text-[13px]">
+        Работодатель: ______________ / {employer(org)}
+        <div className="mt-4">С приказом ознакомлен: ______________ / {e.fio || '________'}</div>
       </div>
       <DocFooter />
     </div>
