@@ -196,6 +196,9 @@ export function Requisites() {
             </Field>
             {text('okved', 'Основной ОКВЭД', '62.01')}
             {text('oktmo', 'ОКТМО', '45000000', 'код территории — нужен в уведомлениях ЕНС')}
+            {text('okpo', 'ОКПО', '12345678')}
+            {text('taxOfficeCode', 'Код налоговой (ИФНС)', '7707', 'код вашей инспекции — в формах ФНС')}
+            {text('phone', 'Телефон', '+7 999 123-45-67')}
             <div className="sm:col-span-2">{text('address', 'Адрес', 'г. Москва, ...')}</div>
           </div>
         </Card>
@@ -205,6 +208,26 @@ export function Requisites() {
             {text('bankAccount', 'Расчётный счёт', '40802810...')}
             {text('bik', 'БИК банка', '044525...')}
             <div className="sm:col-span-2">{text('bankName', 'Название банка', 'Т-Банк / Сбербанк / ...')}</div>
+          </div>
+        </Card>
+
+        <Card title="Электронная подпись (КЭП)">
+          <div className="grid gap-4 sm:grid-cols-2">
+            {text('espOwner', 'Владелец / серийный № сертификата', 'Иванов И.И. / 01 23 45 …')}
+            <Field label="Срок действия КЭП" hint="до этой даты подпись действительна">
+              <input
+                type="date"
+                className={inputClass}
+                value={o.espValidTo || ''}
+                onChange={(e) => updateActiveOrg({ espValidTo: e.target.value })}
+              />
+            </Field>
+          </div>
+          <div className="mt-3">
+            <Note>
+              Подпись КЭП и отправка в ФНС — серверный этап. Здесь храним данные сертификата для
+              справки и контроля срока действия.
+            </Note>
           </div>
         </Card>
 
@@ -311,6 +334,30 @@ export function Requisites() {
                 onChange={(e) => updateActiveOrg({ hasEmployees: e.target.checked })}
               />
               <span className="text-sm text-ink">Есть наёмные работники</span>
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
+                checked={o.ausn}
+                onChange={(e) => updateActiveOrg({ ausn: e.target.checked })}
+              />
+              <span className="text-sm text-ink">
+                АУСН <span className="text-muted">(автоматизированная УСН — без взносов и деклараций)</span>
+              </span>
+            </label>
+
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
+                checked={o.tradeFee}
+                onChange={(e) => updateActiveOrg({ tradeFee: e.target.checked })}
+              />
+              <span className="text-sm text-ink">
+                Плательщик торгового сбора <span className="text-muted">(если введён в регионе)</span>
+              </span>
             </label>
 
             <label className="flex cursor-pointer items-center gap-2.5">

@@ -25,16 +25,24 @@ export interface Org {
   address: string
   okved: string
   oktmo: string // код ОКТМО — нужен в уведомлениях ЕНС / КНД 1110355
+  okpo: string // код ОКПО
+  taxOfficeCode: string // код налоговой инспекции (КодНО в XML-формах ФНС)
+  phone: string // контактный телефон
   // Банк
   bankAccount: string
   bik: string
   bankName: string
+  // Электронная подпись (КЭП)
+  espOwner: string // владелец/серийный номер сертификата
+  espValidTo: string // срок действия КЭП, YYYY-MM-DD
   // Брендинг для печатных форм (data URL изображения)
   logo?: string
   signature?: string
   stamp?: string
   // Система налогообложения
   usnObject: UsnObject
+  ausn: boolean // признак АУСН (автоматизированная УСН)
+  tradeFee: boolean // плательщик торгового сбора
   regionalRate: number | null // ставка в %, null = базовая из параметров
   hasEmployees: boolean
   vat: boolean
@@ -64,10 +72,17 @@ function demoOrg(): Org {
     address: '',
     okved: '',
     oktmo: '',
+    okpo: '',
+    taxOfficeCode: '',
+    phone: '',
     bankAccount: '',
     bik: '',
     bankName: '',
+    espOwner: '',
+    espValidTo: '',
     usnObject: 'income',
+    ausn: false,
+    tradeFee: false,
     regionalRate: null,
     hasEmployees: false,
     vat: false,

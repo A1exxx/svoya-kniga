@@ -57,7 +57,7 @@ export function EnsNotificationDoc({ org, computed }: { org: Org; computed: Comp
           </tr>
           <tr>
             <td className="py-1 text-slate-500">Налоговый орган (код)</td>
-            <td className="py-1 text-right font-medium">0000</td>
+            <td className="py-1 text-right font-medium">{org.taxOfficeCode || '—'}</td>
           </tr>
         </tbody>
       </table>
