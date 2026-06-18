@@ -7,7 +7,7 @@ import {
   type VacationEvent,
 } from '../state/employeesStore'
 import { periodDays, accruedVacationDays } from '../lib/vacation'
-import { VacationOrderDoc } from '../components/employee/EmployeeDocs'
+import { VacationOrderDoc, VacationScheduleDoc } from '../components/employee/EmployeeDocs'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation, workdaysInMonth } from '../lib/taxcore'
 import { formatRub, formatDate } from '../lib/format'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
@@ -721,6 +721,7 @@ function VacationCalc({ year }: { year: number }) {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [order, setOrder] = useState<VacationEvent | null>(null)
+  const [schedule, setSchedule] = useState(false)
 
   const emp = employees.find((e) => e.id === selId) ?? null
   const base = emp ? vacationBase12m(emp.earningsByYear, year) || emp.salary * 12 : 0
@@ -749,7 +750,18 @@ function VacationCalc({ year }: { year: number }) {
 
   return (
     <div className="space-y-5">
-      <Card title="Отпуск сотрудника">
+      <Card
+        title="Отпуск сотрудника"
+        right={
+          <button
+            type="button"
+            onClick={() => setSchedule(true)}
+            className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50"
+          >
+            График отпусков (Т-7)
+          </button>
+        }
+      >
         <div className="space-y-4">
           <EmployeePicker employees={employees} value={selId} onPick={(e) => setSelId(e?.id ?? '')} />
           {emp && accrued != null && (
@@ -829,8 +841,14 @@ function VacationCalc({ year }: { year: number }) {
       )}
 
       {order && emp && (
-        <PrintModal title="Приказ на отпуск" onClose={() => setOrder(null)}>
+        <PrintModal title="Приказ на отпуск (Т-6)" onClose={() => setOrder(null)}>
           <VacationOrderDoc org={activeOrg} employee={emp} vacation={order} />
+        </PrintModal>
+      )}
+
+      {schedule && (
+        <PrintModal title="График отпусков (Т-7)" onClose={() => setSchedule(false)}>
+          <VacationScheduleDoc org={activeOrg} employees={employees} year={year} />
         </PrintModal>
       )}
     </div>

@@ -10,6 +10,18 @@ import type { Employee, VacationEvent, VacationType } from '../../state/employee
 const today = () => new Date().toISOString().slice(0, 10)
 const r0 = (n: number) => formatRub(Math.round(n))
 
+const MONTH_GEN = [
+  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
+  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря',
+]
+/** Дата в виде официального бланка: «03» апреля 2026 г. */
+function dateRu(iso?: string): string {
+  if (!iso) return '«__» ____________ 20__ г.'
+  const [y, m, d] = iso.split('-').map(Number)
+  if (!y || !m || !d) return iso
+  return `«${String(d).padStart(2, '0')}» ${MONTH_GEN[m - 1]} ${y} г.`
+}
+
 function employer(org: Org): string {
   return org.fio || org.name || 'Индивидуальный предприниматель'
 }
@@ -345,7 +357,7 @@ const VAC_TYPE_TEXT: Record<VacationType, string> = {
   unpaid: 'отпуск без сохранения заработной платы',
 }
 
-/** Приказ о предоставлении отпуска работнику (упрощённый аналог Т-6). */
+/** Приказ о предоставлении отпуска работнику — унифицированная форма Т-6 (ОКУД 0301005). */
 export function VacationOrderDoc({
   org,
   employee: e,
@@ -356,27 +368,206 @@ export function VacationOrderDoc({
   vacation: VacationEvent
 }) {
   const days = periodDays(v.from, v.to)
+  const isRegular = v.type === 'regular'
+  const cap = 'px-2 py-0.5 border border-slate-400'
   return (
-    <div>
-      <div className="text-center text-base font-semibold">
-        Приказ (распоряжение) о предоставлении отпуска работнику
+    <div className="text-[12.5px]">
+      <div className="flex items-start justify-between">
+        <div className="text-[10px] text-slate-500">
+          Унифицированная форма № Т-6
+          <br />
+          Утв. постановлением Госкомстата России от 05.01.2004 № 1
+        </div>
+        <table className="border-collapse text-[11px]">
+          <tbody>
+            <tr>
+              <td className={`${cap} text-slate-500`}></td>
+              <td className={`${cap} text-center text-slate-500`}>Код</td>
+            </tr>
+            <tr>
+              <td className={cap}>Форма по ОКУД</td>
+              <td className={`${cap} tnum text-center`}>0301005</td>
+            </tr>
+            <tr>
+              <td className={cap}>по ОКПО</td>
+              <td className={`${cap} tnum text-center`}>{org.okpo || '—'}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div className="mt-1 text-center text-xs text-slate-500">
-        {employer(org)}{org.inn && `, ИНН ${org.inn}`}
+
+      <div className="mt-1 font-medium">
+        {employer(org)}
+        {org.inn && `, ИНН ${org.inn}`}
       </div>
-      <div className="mt-2 text-center text-[13px]">№ ______ от {formatDate(today())}</div>
-      <div className="mt-6 space-y-3 text-[13px] leading-relaxed">
-        <p>
-          Предоставить <span className="font-medium">{e.fio || '________________'}</span>
-          {e.position && <> ({e.position})</>} {VAC_TYPE_TEXT[v.type]} на{' '}
-          <span className="font-medium">{days}</span> календарных дней с{' '}
-          {v.from ? formatDate(v.from) : '__________'} по {v.to ? formatDate(v.to) : '__________'}.
-        </p>
+      <div className="text-[10px] text-slate-400">(наименование организации)</div>
+
+      <div className="mt-4 text-center">
+        <div className="inline-flex gap-8 text-[11px] text-slate-500">
+          <span>Номер документа</span>
+          <span>Дата составления</span>
+        </div>
+        <div className="text-base font-semibold leading-tight">
+          ПРИКАЗ (распоряжение)
+          <br />
+          о предоставлении отпуска работнику
+        </div>
       </div>
-      <div className="mt-10 text-[13px]">
-        Работодатель: ______________ / {employer(org)}
-        <div className="mt-4">С приказом ознакомлен: ______________ / {e.fio || '________'}</div>
+
+      <div className="mt-5 space-y-1">
+        <div>
+          Предоставить отпуск <span className="font-medium">{e.fio || '________________________'}</span>
+        </div>
+        <div className="text-[10px] text-slate-400">(фамилия, имя, отчество)</div>
+        <div className="mt-1">{e.position || '________________________'}</div>
+        <div className="text-[10px] text-slate-400">(должность (специальность, профессия))</div>
+        <div className="mt-1">за период работы с «__» __________ 20__ г. по «__» __________ 20__ г.</div>
       </div>
+
+      <div className="mt-4 space-y-2">
+        <div>
+          <span className="font-medium">А.</span> ежегодный основной оплачиваемый отпуск на{' '}
+          <span className="font-medium">{isRegular ? days : '____'}</span> календарных дней
+          {isRegular && (
+            <>
+              {' '}с {dateRu(v.from)} по {dateRu(v.to)}
+            </>
+          )}
+        </div>
+        <div>
+          <span className="font-medium">Б.</span>{' '}
+          {!isRegular ? VAC_TYPE_TEXT[v.type] : 'ежегодный дополнительный, учебный, без сохранения зарплаты и др.'}{' '}
+          на <span className="font-medium">{!isRegular ? days : '____'}</span> календарных дней
+          {!isRegular && (
+            <>
+              {' '}с {dateRu(v.from)} по {dateRu(v.to)}
+            </>
+          )}
+        </div>
+        <div>
+          <span className="font-medium">В.</span> Всего отпуск на{' '}
+          <span className="font-medium">{days}</span> календарных дней с {dateRu(v.from)} по{' '}
+          {dateRu(v.to)}
+        </div>
+      </div>
+
+      <div className="mt-8 text-[12.5px]">
+        <div className="flex items-end gap-2">
+          <span>Руководитель организации: ИП</span>
+          {org.signature ? (
+            <img src={org.signature} alt="Подпись" className="h-8 object-contain" />
+          ) : (
+            <span>______________</span>
+          )}
+          <span>/ {employer(org)}</span>
+        </div>
+        <div className="text-[10px] text-slate-400">(должность) (личная подпись) (расшифровка подписи)</div>
+        <div className="mt-4">
+          С приказом (распоряжением) работник ознакомлен ______________ {dateRu(today())}
+        </div>
+        <div className="text-[10px] text-slate-400">(личная подпись)</div>
+      </div>
+      <DocFooter />
+    </div>
+  )
+}
+
+/** График отпусков на год — унифицированная форма Т-7 (ОКУД 0301020), по всем сотрудникам. */
+export function VacationScheduleDoc({
+  org,
+  employees,
+  year,
+}: {
+  org: Org
+  employees: Employee[]
+  year: number
+}) {
+  const rows: { dept: string; position: string; fio: string; days: number; from: string; to: string }[] = []
+  for (const e of employees) {
+    for (const v of e.vacations ?? []) {
+      const d = periodDays(v.from, v.to)
+      if (d <= 0) continue
+      rows.push({ dept: '—', position: e.position || '—', fio: e.fio || '—', days: d, from: v.from, to: v.to })
+    }
+  }
+  const th = 'border border-slate-400 px-1.5 py-1 font-semibold align-bottom'
+  const td = 'border border-slate-400 px-1.5 py-1 align-top'
+  return (
+    <div className="text-[11px]">
+      <div className="flex items-start justify-between">
+        <div className="text-[10px] text-slate-500">
+          Унифицированная форма № Т-7
+          <br />
+          Утв. постановлением Госкомстата России от 05.01.2004 № 1
+        </div>
+        <div className="text-[10px] text-slate-500">
+          Форма по ОКУД <span className="tnum">0301020</span>
+          <br />
+          по ОКПО <span className="tnum">{org.okpo || '—'}</span>
+        </div>
+      </div>
+      <div className="mt-2 text-center text-base font-semibold">ГРАФИК ОТПУСКОВ на {year} год</div>
+      <div className="mt-0.5 text-center font-medium">
+        {employer(org)}
+        {org.inn && `, ИНН ${org.inn}`}
+      </div>
+      <div className="text-center text-[10px] text-slate-400">(наименование организации)</div>
+
+      <table className="mt-4 w-full border-collapse text-[10.5px]">
+        <thead>
+          <tr>
+            <th className={th} rowSpan={2}>Структурное подразделение</th>
+            <th className={th} rowSpan={2}>Должность (специальность, профессия)</th>
+            <th className={th} rowSpan={2}>Фамилия, имя, отчество</th>
+            <th className={th} colSpan={3}>Отпуск</th>
+            <th className={th} colSpan={2}>Перенесение отпуска</th>
+            <th className={th} rowSpan={2}>Приме­чание</th>
+          </tr>
+          <tr>
+            <th className={th}>кол-во кал. дней</th>
+            <th className={th}>дата запланированная</th>
+            <th className={th}>дата фактическая</th>
+            <th className={th}>основание (документ)</th>
+            <th className={th}>дата предполаг. отпуска</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length === 0 ? (
+            <tr>
+              <td className={`${td} text-center text-slate-500`} colSpan={9}>
+                Нет запланированных отпусков. Добавьте отпуска сотрудникам во вкладке «Отпуск».
+              </td>
+            </tr>
+          ) : (
+            rows.map((r, i) => (
+              <tr key={i}>
+                <td className={td}>{r.dept}</td>
+                <td className={td}>{r.position}</td>
+                <td className={td}>{r.fio}</td>
+                <td className={`${td} tnum text-center`}>{r.days}</td>
+                <td className={`${td} tnum`}>
+                  {formatDate(r.from)}–{formatDate(r.to)}
+                </td>
+                <td className={td}></td>
+                <td className={td}></td>
+                <td className={td}></td>
+                <td className={td}></td>
+              </tr>
+            ))
+          )}
+        </tbody>
+      </table>
+
+      <div className="mt-6 flex items-end gap-2 text-[12px]">
+        <span>Индивидуальный предприниматель: ИП</span>
+        {org.signature ? (
+          <img src={org.signature} alt="Подпись" className="h-8 object-contain" />
+        ) : (
+          <span>______________</span>
+        )}
+        <span>/ {employer(org)}</span>
+      </div>
+      <div className="text-[10px] text-slate-400">(личная подпись) (расшифровка подписи)</div>
       <DocFooter />
     </div>
   )
