@@ -196,13 +196,80 @@ export function DeductionApplicationDoc({ org, employee: e }: { org: Org; employ
   )
 }
 
-export type EmployeeDocType = 'card' | 'hireOrder' | 'incomeCert' | 'deductionApp'
+/** Расчётный листок (листок выдачи зарплаты) — начисления и выплаты за месяц. */
+export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee }) {
+  let calc: ReturnType<typeof calcSalary> | null = null
+  try {
+    calc = calcSalary(org.year, e.salary, employeeSalaryOptions(e))
+  } catch {
+    calc = null
+  }
+  const m = calc?.months[0]
+  const hasAdv = (e.advancePercent ?? 0) > 0
+  return (
+    <div>
+      <div className="text-center text-base font-semibold">Расчётный листок</div>
+      <div className="mt-1 text-center text-xs text-slate-500">
+        {employer(org)}{org.inn && `, ИНН ${org.inn}`} · {e.fio || '—'} · за месяц ({org.year})
+      </div>
+      {!m ? (
+        <p className="mt-5 text-sm text-slate-500">Укажите оклад сотрудника.</p>
+      ) : (
+        <table className="mt-5 w-full text-[13px]">
+          <tbody>
+            <tr className="border-b border-slate-300 font-semibold">
+              <td className="py-1.5">Начислено</td>
+              <td className="tnum py-1.5 text-right">{r0(m.gross.toNumber())}</td>
+            </tr>
+            <Field label="Оклад" value={r0(m.gross.toNumber())} />
+            <tr className="border-b border-slate-300 font-semibold">
+              <td className="py-1.5">Удержано</td>
+              <td className="tnum py-1.5 text-right">{r0(m.ndfl.toNumber())}</td>
+            </tr>
+            <Field label="НДФЛ (13%/прогрессия)" value={r0(m.ndfl.toNumber())} />
+            <tr className="border-t-2 border-slate-300 font-semibold">
+              <td className="py-2">К выплате на руки</td>
+              <td className="tnum py-2 text-right">{r0(m.net.toNumber())}</td>
+            </tr>
+            {hasAdv && (
+              <>
+                <tr className="border-b border-slate-200">
+                  <td className="py-1.5 pl-4 text-slate-500">— аванс ({e.advanceDay ?? 25} числа)</td>
+                  <td className="tnum py-1.5 text-right">{r0(m.advance_net.toNumber())}</td>
+                </tr>
+                <tr className="border-b border-slate-200">
+                  <td className="py-1.5 pl-4 text-slate-500">— зарплата ({e.salaryDay ?? 10} числа)</td>
+                  <td className="tnum py-1.5 text-right">{r0(m.settlement_net.toNumber())}</td>
+                </tr>
+              </>
+            )}
+          </tbody>
+        </table>
+      )}
+      {m && (
+        <p className="mt-3 text-[12px] text-slate-500">
+          Справочно: страховые взносы работодателя {r0(m.vznosy.toNumber())} + травматизм{' '}
+          {r0(m.travmatizm.toNumber())} (с работника не удерживаются). Отпускные и больничные
+          добавляются в листок при наличии таких событий у сотрудника.
+        </p>
+      )}
+      <div className="mt-8 text-[13px]">
+        Выдал: ______________ / {employer(org)}
+        <div className="mt-4">Получил: ______________ / {e.fio || '________'}</div>
+      </div>
+      <DocFooter />
+    </div>
+  )
+}
+
+export type EmployeeDocType = 'card' | 'hireOrder' | 'incomeCert' | 'deductionApp' | 'payslip'
 
 export const EMPLOYEE_DOC_TITLE: Record<EmployeeDocType, string> = {
   card: 'Личная карточка',
   hireOrder: 'Приказ о приёме',
   incomeCert: 'Справка о доходах (НДФЛ)',
   deductionApp: 'Заявление на вычет',
+  payslip: 'Расчётный листок',
 }
 
 export function EmployeeDoc({
@@ -217,5 +284,6 @@ export function EmployeeDoc({
   if (type === 'card') return <PersonalCardDoc org={org} employee={employee} />
   if (type === 'hireOrder') return <HireOrderDoc org={org} employee={employee} />
   if (type === 'incomeCert') return <IncomeCertDoc org={org} employee={employee} />
+  if (type === 'payslip') return <PayslipDoc org={org} employee={employee} />
   return <DeductionApplicationDoc org={org} employee={employee} />
 }

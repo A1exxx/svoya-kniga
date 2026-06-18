@@ -3,6 +3,24 @@ import { useOrg } from './orgStore'
 import { persistKey } from '../lib/storage/idb'
 import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
+/** Вид отпуска: очередной (оплачиваемый) / по уходу за ребёнком / без сохранения зарплаты. */
+export type VacationType = 'regular' | 'childcare' | 'unpaid'
+
+/** Событие отпуска сотрудника (период + вид). */
+export interface VacationEvent {
+  id: string
+  from: string // YYYY-MM-DD
+  to: string // YYYY-MM-DD
+  type: VacationType
+}
+
+/** Событие больничного (период нетрудоспособности). */
+export interface SickEvent {
+  id: string
+  from: string // YYYY-MM-DD
+  to: string // YYYY-MM-DD
+}
+
 /** Сотрудник в штате организации (для расчётов и отчётности). */
 export interface Employee {
   id: string
@@ -24,10 +42,16 @@ export interface Employee {
   dismissalDate?: string // YYYY-MM-DD
   /** День выплаты аванса (1–31), для уведомлений/отображения */
   advanceDay?: number
+  /** День выплаты окончательной зарплаты (1–31) — уходит в задачи дашборда */
+  salaryDay?: number
   /** Аванс, % от оклада (0 = без разбивки на аванс/расчёт) */
   advancePercent?: number
-  /** Заработок по годам (для баз отпускных/больничных) */
-  earningsByYear?: Record<number, number>
+  /** Заработок по годам ПО МЕСЯЦАМ (12 значений янв..дек) — для баз отпускных/больничных */
+  earningsByYear?: Record<number, number[]>
+  /** Отпуска сотрудника (период + вид) */
+  vacations?: VacationEvent[]
+  /** Больничные сотрудника (периоды) */
+  sickLeaves?: SickEvent[]
   /** ИП в реестре МСП — льготный тариф взносов */
   msp: boolean
   // Личные данные (для печатных форм карточки)
@@ -58,9 +82,24 @@ const EMP_DEFAULTS: Omit<Employee, 'id'> = {
   stazhPriorMonths: 0,
   hireDate: '',
   advanceDay: 25,
+  salaryDay: 10,
   advancePercent: 0,
   earningsByYear: {},
+  vacations: [],
+  sickLeaves: [],
   msp: true,
+}
+
+/** Миграция заработка: старая схема (одно число на год) → массив 12 месяцев (число в декабрь). */
+function migrateEarnings(e: Employee): Employee {
+  const raw = e.earningsByYear
+  if (!raw) return e
+  const out: Record<number, number[]> = {}
+  for (const [y, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) out[Number(y)] = v
+    else out[Number(y)] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Number(v) || 0] // годовое число → декабрь
+  }
+  return { ...e, earningsByYear: out }
 }
 
 function load(): Store {
@@ -68,7 +107,7 @@ function load(): Store {
     const raw = (JSON.parse(localStorage.getItem(KEY) || '{}') as Store) || {}
     // Бэкфилл дефолтов для записей из старой схемы (children, stazhMode, advance* и т.п.).
     for (const k of Object.keys(raw)) {
-      raw[k] = (raw[k] ?? []).map((e) => ({ ...EMP_DEFAULTS, ...e }))
+      raw[k] = (raw[k] ?? []).map((e) => migrateEarnings({ ...EMP_DEFAULTS, ...e }))
     }
     return raw
   } catch {
@@ -97,21 +136,7 @@ export function EmployeesProvider({ children }: { children: ReactNode }) {
 
   const addEmployee = (): string => {
     const id = makeId()
-    const e: Employee = {
-      id,
-      fio: '',
-      position: '',
-      salary: 60000,
-      children: 0,
-      stazhYears: 5,
-      stazhMode: 'auto',
-      stazhPriorMonths: 0,
-      hireDate: '',
-      advanceDay: 25,
-      advancePercent: 0,
-      earningsByYear: {},
-      msp: true,
-    }
+    const e: Employee = { ...EMP_DEFAULTS, id, salary: 60000, stazhYears: 5 }
     logChange('Сотрудник', 'create', 'Новый сотрудник')
     setStore((s) => ({ ...s, [activeOrgId]: [...(s[activeOrgId] ?? []), e] }))
     return id

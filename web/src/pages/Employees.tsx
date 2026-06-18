@@ -299,10 +299,13 @@ function StaffRoster({ year }: { year: number }) {
           </Card>
 
           {/* Аванс */}
-          <Card title="Аванс">
-            <div className="grid gap-3 sm:grid-cols-2">
+          <Card title="Аванс и зарплата">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Field label="День аванса (1–31)">
                 {numInput(selected.advanceDay ?? 25, (n) => up({ advanceDay: Math.min(31, n) }), { max: 31 })}
+              </Field>
+              <Field label="День выдачи зарплаты (1–31)" hint="уходит в задачи дашборда">
+                {numInput(selected.salaryDay ?? 10, (n) => up({ salaryDay: Math.min(31, n) }), { max: 31 })}
               </Field>
               <Field label="Аванс, % от оклада" hint="0 = без разбивки на аванс/расчёт">
                 {numInput(selected.advancePercent ?? 0, (n) => up({ advancePercent: Math.min(100, n) }), { max: 100 })}
@@ -310,19 +313,36 @@ function StaffRoster({ year }: { year: number }) {
             </div>
           </Card>
 
-          {/* Заработок по годам */}
-          <Card title="Заработок по годам" >
+          {/* Заработок по годам ПО МЕСЯЦАМ (оклад мог меняться внутри года) */}
+          <Card title="Заработок по годам (по месяцам)">
             <p className="mb-3 text-xs text-muted">
-              Для баз отпускных и больничных (берётся заработок за прошлые годы).
+              Для баз отпускных и больничных. Оклад мог меняться в течение года — заполните по месяцам
+              (январь…декабрь). Итог за год считается автоматически.
             </p>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {earningsYears.map((y) => (
-                <Field key={y} label={`${y} год, ₽`}>
-                  {numInput(selected.earningsByYear?.[y] ?? 0, (n) =>
-                    up({ earningsByYear: { ...(selected.earningsByYear ?? {}), [y]: n } })
-                  )}
-                </Field>
-              ))}
+            <div className="space-y-3">
+              {earningsYears.map((y) => {
+                const arr = selected.earningsByYear?.[y] ?? []
+                const total = arr.reduce((s, x) => s + (x || 0), 0)
+                return (
+                  <div key={y} className="rounded-lg border border-line p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-medium text-ink">{y} год</span>
+                      <span className="tnum text-sm text-muted">итого {formatRub(total)}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+                      {MONTH_NAMES.map((mn, m) => (
+                        <label key={m} className="block">
+                          <span className="mb-0.5 block text-[11px] text-muted">{mn.slice(0, 3)}</span>
+                          {numInput(arr[m] ?? 0, (n) => {
+                            const next = Array.from({ length: 12 }, (_, i) => (i === m ? n : arr[i] ?? 0))
+                            up({ earningsByYear: { ...(selected.earningsByYear ?? {}), [y]: next } })
+                          })}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </Card>
 
