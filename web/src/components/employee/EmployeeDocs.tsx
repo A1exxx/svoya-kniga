@@ -26,6 +26,36 @@ function employer(org: Org): string {
   return org.fio || org.name || 'Индивидуальный предприниматель'
 }
 
+/** Шапка унифицированной кадровой формы: № формы + Код по ОКУД + по ОКПО. */
+function KadrHead({ org, formNo, okud }: { org: Org; formNo: string; okud: string }) {
+  const cap = 'px-2 py-0.5 border border-slate-400'
+  return (
+    <div className="flex items-start justify-between">
+      <div className="text-[10px] text-slate-500">
+        Унифицированная форма № {formNo}
+        <br />
+        Утв. постановлением Госкомстата России от 05.01.2004 № 1
+      </div>
+      <table className="border-collapse text-[11px]">
+        <tbody>
+          <tr>
+            <td className={`${cap} text-slate-500`}></td>
+            <td className={`${cap} text-center text-slate-500`}>Код</td>
+          </tr>
+          <tr>
+            <td className={cap}>Форма по ОКУД</td>
+            <td className={`${cap} tnum text-center`}>{okud}</td>
+          </tr>
+          <tr>
+            <td className={cap}>по ОКПО</td>
+            <td className={`${cap} tnum text-center`}>{org.okpo || '—'}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <tr className="border-b border-slate-200 align-top">
@@ -44,14 +74,16 @@ function DocFooter() {
   )
 }
 
-/** Личная карточка работника (упрощённый аналог формы Т-2). */
+/** Личная карточка работника — унифицированная форма Т-2 (ОКУД 0301002). */
 export function PersonalCardDoc({ org, employee: e }: { org: Org; employee: Employee }) {
   const stazh = e.hireDate ? formatStazh(computeStazh(e.hireDate, undefined, e.stazhPriorMonths)) : `${e.stazhYears} лет`
   return (
     <div>
-      <div className="text-center text-base font-semibold">Личная карточка работника</div>
-      <div className="mt-1 text-center text-xs text-slate-500">Работодатель: {employer(org)}{org.inn && `, ИНН ${org.inn}`}</div>
-      <table className="mt-5 w-full text-[13px]">
+      <KadrHead org={org} formNo="Т-2" okud="0301002" />
+      <div className="mt-1 font-medium">{employer(org)}{org.inn && `, ИНН ${org.inn}`}</div>
+      <div className="text-[10px] text-slate-400">(наименование организации)</div>
+      <div className="mt-3 text-center text-base font-semibold">ЛИЧНАЯ КАРТОЧКА РАБОТНИКА</div>
+      <table className="mt-4 w-full text-[13px]">
         <tbody>
           <Field label="ФИО" value={e.fio} />
           <Field label="Должность" value={e.position} />
@@ -75,37 +107,59 @@ export function PersonalCardDoc({ org, employee: e }: { org: Org; employee: Empl
   )
 }
 
-/** Приказ (распоряжение) о приёме работника на работу (упрощённый аналог Т-1). */
+/** Приказ (распоряжение) о приёме работника на работу — унифицированная форма Т-1 (ОКУД 0301001). */
 export function HireOrderDoc({ org, employee: e }: { org: Org; employee: Employee }) {
   return (
-    <div>
-      <div className="text-center text-base font-semibold">
-        Приказ (распоряжение) о приёме работника на работу
+    <div className="text-[12.5px]">
+      <KadrHead org={org} formNo="Т-1" okud="0301001" />
+      <div className="mt-1 font-medium">{employer(org)}{org.inn && `, ИНН ${org.inn}`}</div>
+      <div className="text-[10px] text-slate-400">(наименование организации)</div>
+
+      <div className="mt-4 text-center">
+        <div className="inline-flex gap-8 text-[11px] text-slate-500">
+          <span>Номер документа</span>
+          <span>Дата составления</span>
+        </div>
+        <div className="text-base font-semibold leading-tight">
+          ПРИКАЗ (распоряжение)
+          <br />
+          о приёме работника на работу
+        </div>
       </div>
-      <div className="mt-1 text-center text-xs text-slate-500">
-        {employer(org)}{org.inn && `, ИНН ${org.inn}`}
+
+      <div className="mt-5 space-y-1">
+        <div>Принять на работу с {dateRu(e.hireDate)} по «__» __________ 20__ г. (бессрочно)</div>
+        <div className="mt-2">
+          <span className="font-medium">{e.fio || '________________________'}</span>
+        </div>
+        <div className="text-[10px] text-slate-400">(фамилия, имя, отчество) / Табельный номер</div>
+        <div className="mt-1">{e.position || '________________________'}</div>
+        <div className="text-[10px] text-slate-400">(должность (специальность, профессия))</div>
+        <div className="mt-1">
+          Условия приёма на работу, характер работы: постоянно, полная занятость.
+        </div>
+        <div className="mt-1">
+          с тарифной ставкой (окладом) <span className="font-medium">{r0(e.salary)}</span> в месяц,
+          надбавка —.
+        </div>
+        <div className="mt-1">с испытанием на срок —.</div>
       </div>
-      <div className="mt-2 text-center text-[13px]">
-        № ______ от {e.hireDate ? formatDate(e.hireDate) : formatDate(today())}
-      </div>
-      <div className="mt-6 space-y-3 text-[13px] leading-relaxed">
-        <p>
-          Принять <span className="font-medium">{e.fio || '________________'}</span> на работу
-          {e.position && (
-            <>
-              {' '}на должность <span className="font-medium">{e.position}</span>
-            </>
-          )}{' '}
-          с {e.hireDate ? formatDate(e.hireDate) : '__________'}.
-        </p>
-        <p>
-          Условия приёма: оклад <span className="font-medium">{r0(e.salary)}</span> в месяц,
-          постоянно, полная занятость.
-        </p>
-      </div>
-      <div className="mt-10 text-[13px]">
-        Работодатель: ______________ / {employer(org)}
-        <div className="mt-4">С приказом ознакомлен: ______________ / {e.fio || '________'}</div>
+
+      <div className="mt-8">
+        <div className="flex items-end gap-2">
+          <span>Руководитель организации: ИП</span>
+          {org.signature ? (
+            <img src={org.signature} alt="Подпись" className="h-8 object-contain" />
+          ) : (
+            <span>______________</span>
+          )}
+          <span>/ {employer(org)}</span>
+        </div>
+        <div className="text-[10px] text-slate-400">(должность) (личная подпись) (расшифровка подписи)</div>
+        <div className="mt-4">
+          С приказом (распоряжением) работник ознакомлен ______________ {dateRu(e.hireDate)}
+        </div>
+        <div className="text-[10px] text-slate-400">(личная подпись)</div>
       </div>
       <DocFooter />
     </div>
