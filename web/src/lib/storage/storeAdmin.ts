@@ -16,7 +16,11 @@ const SNAPSHOTS_KEY = 'svoyakniga.snapshots.v1'
 const AUDIT_KEY = 'svoyakniga.audit.v1'
 const TOKEN_KEY = 'svoyakniga.dadata.token'
 const AUTO_KEY = 'svoyakniga.lastAutoSnapshot'
-const EXCLUDE = new Set([SNAPSHOTS_KEY, AUDIT_KEY, TOKEN_KEY, AUTO_KEY])
+const THEME_KEY = 'svoyakniga.theme'
+const ERRORLOG_KEY = 'svoyakniga.errorlog.v1'
+// Служебные ключи (не бизнес-данные) исключаем из снимков/бэкапа/отката, иначе тема
+// сбрасывается, а журнал ошибок стирается/перетирается чужим бэкапом при откате/импорте.
+const EXCLUDE = new Set([SNAPSHOTS_KEY, AUDIT_KEY, TOKEN_KEY, AUTO_KEY, THEME_KEY, ERRORLOG_KEY])
 const MAX_SNAPSHOTS = 20
 const MAX_AUDIT = 500
 
@@ -192,8 +196,13 @@ export function maybeAutoSnapshot(): void {
     const todayStr = nowIso().slice(0, 10)
     if (last === todayStr) return
     if (dataKeys().length === 0) return
-    createSnapshot('Автосохранение при запуске')
-    localStorage.setItem(AUTO_KEY, todayStr)
+    const label = 'Автосохранение при запуске'
+    const snap: Snapshot = { id: makeId(), label, createdAt: nowIso(), data: captureData() }
+    const ok = saveSnapshots([snap, ...listSnapshots()])
+    logAudit(ok ? 'Снимок создан' : 'Снимок НЕ сохранён (хранилище переполнено)', label)
+    // Помечаем день как покрытый ТОЛЬКО при успешном сохранении, иначе при переполнении
+    // авто-ретрай заблокируется до конца суток (а место могло освободиться).
+    if (ok) localStorage.setItem(AUTO_KEY, todayStr)
   } catch {
     /* ignore */
   }

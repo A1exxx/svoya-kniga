@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import {
   CONTRACTOR_TYPE_LABEL,
@@ -30,6 +30,13 @@ export function Contractors() {
 
   const selected = contractors.find((c) => c.id === selectedId) ?? null
   const create = () => setSelectedId(addContractor())
+
+  // При переключении ИП сбрасываем выбор на первого контрагента нового ИП (иначе карточка
+  // «повисает» пустой с id из прошлого ИП). По образцу StaffRoster.
+  useEffect(() => {
+    setSelectedId(contractors[0]?.id ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrg.id])
 
   const [innBusy, setInnBusy] = useState(false)
   const [innMsg, setInnMsg] = useState<string | null>(null)
@@ -117,6 +124,7 @@ export function Contractors() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!window.confirm(`Удалить контрагента «${selected.name || 'без названия'}»?`)) return
                   removeContractor(selected.id)
                   setSelectedId(null)
                 }}

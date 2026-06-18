@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 
 /** Оверлей с печатным документом. Кнопка «Печать / PDF» вызывает печать браузера;
- *  @media print в index.css показывает только .print-doc. */
+ *  @media print в index.css показывает только .print-doc. Закрытие — крестом, по фону или Esc. */
 export function PrintModal({
   title,
   onClose,
@@ -11,8 +11,16 @@ export function PrintModal({
   onClose: () => void
   children: ReactNode
 }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/40">
+    <div className="fixed inset-0 z-50 flex flex-col bg-black/40" role="dialog" aria-modal="true" aria-label={title}>
       <div className="no-print flex items-center justify-between border-b border-line bg-white px-5 py-3">
         <span className="font-medium text-ink">{title}</span>
         <div className="flex gap-2">

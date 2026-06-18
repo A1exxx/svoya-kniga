@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { GOOD_KIND_LABEL, useGoods, type GoodKind } from '../state/goodsStore'
 import { formatRub } from '../lib/format'
@@ -17,6 +17,12 @@ export function Goods() {
 
   const selected = goods.find((g) => g.id === selectedId) ?? null
   const create = () => setSelectedId(addGood())
+
+  // При переключении ИП сбрасываем выбор на первую позицию нового ИП.
+  useEffect(() => {
+    setSelectedId(goods[0]?.id ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrg.id])
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
@@ -71,6 +77,7 @@ export function Goods() {
               <button
                 type="button"
                 onClick={() => {
+                  if (!window.confirm(`Удалить позицию «${selected.name || 'без названия'}»?`)) return
                   removeGood(selected.id)
                   setSelectedId(null)
                 }}

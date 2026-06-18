@@ -99,7 +99,7 @@ export function Reports() {
                   downloadText(
                     vatDeclarationFileName(o),
                     vatDeclarationXml(o, computed!.vat!, '24', buildVatBooks(docs, o.year)),
-                    'application/xml;charset=windows-1251'
+                    'application/xml;charset=utf-8'
                   ),
                 sendable: true,
               },

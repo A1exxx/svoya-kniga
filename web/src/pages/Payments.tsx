@@ -70,7 +70,9 @@ export function Payments() {
   const create = () => {
     if (draft.amount <= 0 || !draft.payeeName.trim()) return
     addPayment({ ...draft, status: 'pending', paidDate: '' })
-    setDraft(emptyDraft(draft.kind))
+    // Следующий номер считаем от текущего (+1), а не от устаревшего useMemo nextNumber,
+    // иначе две платёжки подряд получат одинаковый № (в форме 0401060 № должен быть уникален).
+    setDraft({ ...emptyDraft(draft.kind), number: String((Number(draft.number) || 0) + 1) })
   }
 
   const markPaid = (p: Payment) => {
@@ -234,7 +236,8 @@ export function Payments() {
           <button
             type="button"
             onClick={create}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            disabled={draft.amount <= 0 || !draft.payeeName.trim()}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconPlus size={16} />
             Создать платёжку
@@ -321,6 +324,13 @@ export function Payments() {
                         <button
                           type="button"
                           onClick={() => {
+                            if (
+                              !window.confirm(
+                                `Удалить платёжку № ${p.number}?` +
+                                  (p.linkedOpId ? ' Связанный расход в «Деньгах» тоже будет удалён.' : '')
+                              )
+                            )
+                              return
                             // Удаляем и связанный расход в «Деньгах» (иначе осиротевший
                             // расход продолжит уменьшать базу УСН без первичной платёжки).
                             if (p.linkedOpId) removeOp(p.linkedOpId)

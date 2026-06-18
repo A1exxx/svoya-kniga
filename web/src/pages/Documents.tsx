@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import {
   DOC_TYPE_LABEL,
@@ -65,6 +65,12 @@ export function Documents() {
   const { addOp, removeOp, ops } = useOps()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
+
+  // При переключении ИП сбрасываем выбор на первый документ нового ИП.
+  useEffect(() => {
+    setSelectedId(docs[0]?.id ?? null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrg.id])
   const [vatView, setVatView] = useState<'book' | 'purchase' | 'decl' | null>(null)
   const [vatSend, setVatSend] = useState(false)
   const [direction, setDirection] = useState<DocDirection>('outgoing')
@@ -143,7 +149,9 @@ export function Documents() {
         note: selected.direction === 'incoming' ? 'оплата поставщику' : 'оплата по счёту',
         taxable: true,
       })
-    } else if (v !== 'paid' && selected.linkedOpId) {
+    } else if (v === 'unpaid' && selected.linkedOpId) {
+      // Удаляем проводку только при ПОЛНОМ снятии оплаты. «Частично оплачен» не означает
+      // отсутствие денег — проводку дохода/расхода не стираем, чтобы не занизить базу.
       removeOp(selected.linkedOpId)
       patch.linkedOpId = undefined
     }
@@ -237,7 +245,7 @@ export function Documents() {
               type="button"
               disabled={!vatRes}
               onClick={() =>
-                vatRes && downloadText(vatDeclarationFileName(activeOrg), vatDeclarationXml(activeOrg, vatRes, '24', vatBooks), 'application/xml;charset=windows-1251')
+                vatRes && downloadText(vatDeclarationFileName(activeOrg), vatDeclarationXml(activeOrg, vatRes, '24', vatBooks), 'application/xml;charset=utf-8')
               }
               className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-ink transition-colors hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50"
             >
@@ -336,6 +344,13 @@ export function Documents() {
                 <button
                   type="button"
                   onClick={() => {
+                    if (
+                      !window.confirm(
+                        `Удалить ${DOC_TYPE_LABEL[selected.type]} № ${selected.number}?` +
+                          (selected.linkedOpId ? ' Связанная проводка в «Деньгах» тоже будет удалена.' : '')
+                      )
+                    )
+                      return
                     // Удаляем и связанную операцию в «Деньгах», иначе осиротевший
                     // доход/расход останется в КУДиР и налоговой базе.
                     if (selected.linkedOpId) removeOp(selected.linkedOpId)
@@ -439,11 +454,11 @@ export function Documents() {
                 <div className="mb-2 text-sm font-medium text-ink">Позиции</div>
                 <div className="space-y-2">
                   {selected.items.map((it, i) => (
-                    <div key={it.id} className="grid grid-cols-[1fr_70px_110px_36px] gap-2">
+                    <div key={it.id} className="grid grid-cols-[1fr_56px_90px_32px] gap-1.5 sm:grid-cols-[1fr_70px_110px_36px] sm:gap-2">
                       <input className={inputClass} placeholder="Наименование" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.qty} onChange={(e) => setItem(i, { qty: Math.max(0, Number(e.target.value) || 0) })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.price} onChange={(e) => setItem(i, { price: Math.max(0, Number(e.target.value) || 0) })} />
-                      <button type="button" onClick={() => removeItem(i)} className="cursor-pointer rounded-lg border border-line text-slate-400 transition-colors hover:text-danger">✕</button>
+                      <button type="button" aria-label="Удалить строку" title="Удалить строку" onClick={() => removeItem(i)} className="cursor-pointer rounded-lg border border-line text-slate-400 transition-colors hover:text-danger">✕</button>
                     </div>
                   ))}
                 </div>

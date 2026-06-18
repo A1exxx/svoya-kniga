@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps, type Operation } from '../state/opsStore'
 import { useDocs, docTotals } from '../state/docsStore'
@@ -54,6 +54,16 @@ export function Money() {
 
   // Редактирование операции (модалка со всеми полями).
   const [editDraft, setEditDraft] = useState<Operation | null>(null)
+
+  // Закрытие модалки редактирования по Esc.
+  useEffect(() => {
+    if (!editDraft) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setEditDraft(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [editDraft])
 
   const yearOps = ops
     .filter((o) => o.date.startsWith(String(activeOrg.year)))
@@ -444,7 +454,8 @@ export function Money() {
           <button
             type="button"
             onClick={add}
-            className="flex items-center justify-center gap-1.5 self-end rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+            disabled={draft.amount <= 0}
+            className="flex items-center justify-center gap-1.5 self-end rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <IconPlus size={16} />
             Добавить
@@ -583,7 +594,10 @@ export function Money() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeOpCascade(o.id)}
+                          onClick={() => {
+                            if (window.confirm('Удалить операцию? Если она связана со счётом или платёжкой, у них снимется статус «Оплачено».'))
+                              removeOpCascade(o.id)
+                          }}
                           className="cursor-pointer text-xs text-slate-400 transition-colors hover:text-danger"
                         >
                           удалить
@@ -611,10 +625,15 @@ export function Money() {
           <button
             type="button"
             onClick={applyToTaxes}
+            title="Запишет суммы из операций в ручные поля «Доход»/«Расход» на экране «Налоги»"
             className="cursor-pointer rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-700"
           >
-            Перенести в расчёт налогов
+            Записать доход/расход в «Налоги»
           </button>
+          <span className="text-xs text-muted">
+            заменит ручные значения на «Налогах» суммами из операций ({formatRub(income)} /{' '}
+            {formatRub(expense)})
+          </span>
           {applied && (
             <span className="text-sm text-ok">
               Доход {formatRub(income)} и расход {formatRub(expense)} перенесены в «Налоги» ✓
@@ -641,6 +660,9 @@ export function Money() {
       {editDraft && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Изменить операцию"
           onClick={() => setEditDraft(null)}
         >
           <div

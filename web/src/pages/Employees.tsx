@@ -179,6 +179,7 @@ function StaffRoster({ year }: { year: number }) {
               <button
                 type="button"
                 onClick={() => {
+                  if (!window.confirm(`Удалить сотрудника «${selected.fio || 'без имени'}»? Его данные исчезнут из расчётов и отчётов.`)) return
                   removeEmployee(selected.id)
                   setSelectedId(null)
                 }}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { calcPatent } from '../lib/taxcore'
 import { formatRub } from '../lib/format'
@@ -15,6 +15,13 @@ export function Patent() {
   const [months, setMonths] = useState(12)
   const [deduct, setDeduct] = useState(0)
   const [hasEmp, setHasEmp] = useState(activeOrg.hasEmployees)
+
+  // При переключении ИП подтягиваем признак наёмных работников нового ИП (иначе лимит
+  // вычета 50%/100% и стоимость патента считаются по прежнему ИП).
+  useEffect(() => {
+    setHasEmp(activeOrg.hasEmployees)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeOrg.id])
 
   let r: ReturnType<typeof calcPatent> | null = null
   try {

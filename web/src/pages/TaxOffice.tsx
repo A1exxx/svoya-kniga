@@ -162,7 +162,7 @@ export function TaxOffice() {
                   {r.status !== 'received' && (
                     <button type="button" onClick={() => setReconStatus(r.id, 'received')} className="shrink-0 text-xs text-brand-600 hover:underline">отметить полученным</button>
                   )}
-                  <button type="button" onClick={() => removeRecon(r.id)} className="shrink-0 text-xs text-slate-400 hover:text-danger">✕</button>
+                  <button type="button" aria-label="Удалить запрос" title="Удалить" onClick={() => removeRecon(r.id)} className="shrink-0 text-xs text-slate-400 hover:text-danger">✕</button>
                 </div>
               ))}
             </div>
@@ -237,7 +237,7 @@ export function TaxOffice() {
                     <option value="answered">Отвечено</option>
                   </select>
                   <button type="button" onClick={() => setSend(`Ответ на «${l.subject}»`)} className="text-xs text-brand-600 hover:underline">Ответить</button>
-                  <button type="button" onClick={() => removeLetter(l.id)} className="text-xs text-slate-400 hover:text-danger">✕</button>
+                  <button type="button" aria-label="Удалить письмо" title="Удалить" onClick={() => removeLetter(l.id)} className="text-xs text-slate-400 hover:text-danger">✕</button>
                 </div>
               ))
             )}

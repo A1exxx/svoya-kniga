@@ -18,6 +18,13 @@ const rub = (d: { toNumber: () => number } | number): string => {
   return String(Math.round(n))
 }
 
+/** Сумма с копейками (для строк книги продаж/покупок — там официально копейки, и так
+ *  XML совпадает с печатной формой). */
+const rub2 = (d: { toNumber: () => number } | number): string => {
+  const n = typeof d === 'number' ? d : d.toNumber()
+  return n.toFixed(2)
+}
+
 function nowYmd(): string {
   const d = new Date()
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
@@ -34,7 +41,7 @@ function bookXml(tag: string, lines: VatBookLine[]): string[] {
   const rows = lines.map(
     (l) =>
       `      <${tag}Запись НомПор="${l.num}" Контрагент="${esc(l.party)}" ` +
-      `СтоимВсего="${rub(l.withVat)}" Ставка="${l.rate}" СумНДС="${rub(l.vat)}"/>`
+      `СтоимВсего="${rub2(l.withVat)}" Ставка="${l.rate}" СумНДС="${rub2(l.vat)}"/>`
   )
   return [`    <${tag}>`, ...rows, `    </${tag}>`]
 }
@@ -65,7 +72,7 @@ export function vatDeclarationXml(
   const sec8 = books && !special ? bookXml('Раздел8', books.purchases) : []
 
   return [
-    '<?xml version="1.0" encoding="windows-1251"?>',
+    '<?xml version="1.0" encoding="UTF-8"?>',
     `<Файл ИдФайл="${esc(vatDeclarationFileName(org).replace(/\.xml$/, ''))}" ВерсПрог="СвояКнига" ВерсФорм="5.08">`,
     '  <Документ КНД="1151001" ДатаДок="' + nowYmd() + '" Период="' + periodCode + '" ОтчетГод="' + org.year + '">',
     `    <СвНП><НПИП ИННФЛ="${esc(inn)}"/></СвНП>`,

@@ -157,7 +157,10 @@ export function Settings() {
                         min={0}
                         className={`${inputClass} pr-9 text-right`}
                         value={draft[f] ?? ''}
-                        onChange={(e) => setDraft((d) => ({ ...d, [f]: e.target.value }))}
+                        onChange={(e) => {
+                          setDraft((d) => ({ ...d, [f]: e.target.value }))
+                          setSaved(false) // правка → «Сохранено ✓» больше не актуально
+                        }}
                       />
                       <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">
                         {info.kind === 'percent' ? '%' : '₽'}
