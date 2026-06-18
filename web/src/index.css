@@ -59,8 +59,30 @@ html.dark body {
 .dark .bg-red-50 { background-color: rgba(220, 38, 38, 0.18); }
 .dark .text-brand-600 { color: #93b4fd; }
 .dark .shadow-card { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); }
-/* Печатные документы всегда на белом фоне с тёмным текстом (для печати/PDF). */
-.dark .print-doc { background-color: #ffffff; color: #0f172a; }
+/* Печатные документы (.print-doc) — ВСЕГДА белый лист с тёмным текстом и видимыми
+   границами, в любой теме (бланк должен выглядеть как настоящий документ ФНС, а не
+   тёмно-серое на тёмном). Перебиваем тёмные оверрайды для содержимого документа. */
+.dark .print-doc,
+.dark .print-doc .bg-white {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+.dark .print-doc .bg-slate-50,
+.dark .print-doc .bg-slate-100 { background-color: #f1f5f9 !important; }
+.dark .print-doc .bg-brand-50 { background-color: #eff6ff !important; }
+.dark .print-doc .text-ink { color: #0f172a !important; }
+.dark .print-doc .text-muted { color: #475569 !important; }
+.dark .print-doc .text-slate-700 { color: #334155 !important; }
+.dark .print-doc .text-slate-600 { color: #475569 !important; }
+.dark .print-doc .text-slate-500 { color: #64748b !important; }
+.dark .print-doc .text-slate-400 { color: #94a3b8 !important; }
+.dark .print-doc .text-slate-300 { color: #cbd5e1 !important; }
+.dark .print-doc .text-brand-600 { color: #2563eb !important; }
+.dark .print-doc .text-ok { color: #15803d !important; }
+.dark .print-doc .border-line { border-color: #cbd5e1 !important; }
+.dark .print-doc .border-slate-200 { border-color: #e2e8f0 !important; }
+.dark .print-doc .border-slate-300 { border-color: #cbd5e1 !important; }
+.dark .print-doc .border-slate-400 { border-color: #94a3b8 !important; }
 
 /* Печать: показываем только документ .print-doc */
 @media print {
