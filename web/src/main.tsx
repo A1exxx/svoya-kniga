@@ -10,6 +10,7 @@ import { GoodsProvider } from './state/goodsStore'
 import { EmployeesProvider } from './state/employeesStore'
 import { ArchiveProvider } from './state/archiveStore'
 import { TaxOfficeProvider } from './state/taxOfficeStore'
+import { PaymentsProvider } from './state/paymentsStore'
 import { applyOverrides } from './state/paramsStore'
 import { maybeAutoSnapshot } from './lib/storage/storeAdmin'
 import { recoverFromIdb } from './lib/storage/idb'
@@ -29,7 +30,9 @@ function render() {
                   <DocsProvider>
                     <ArchiveProvider>
                       <TaxOfficeProvider>
-                        <App />
+                        <PaymentsProvider>
+                          <App />
+                        </PaymentsProvider>
                       </TaxOfficeProvider>
                     </ArchiveProvider>
                   </DocsProvider>

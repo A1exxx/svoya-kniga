@@ -10,6 +10,7 @@ const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m
 const Requisites = lazy(() => import('./pages/Requisites').then((m) => ({ default: m.Requisites })))
 const Employees = lazy(() => import('./pages/Employees').then((m) => ({ default: m.Employees })))
 const Money = lazy(() => import('./pages/Money').then((m) => ({ default: m.Money })))
+const Payments = lazy(() => import('./pages/Payments').then((m) => ({ default: m.Payments })))
 const Documents = lazy(() => import('./pages/Documents').then((m) => ({ default: m.Documents })))
 const Contractors = lazy(() => import('./pages/Contractors').then((m) => ({ default: m.Contractors })))
 const Goods = lazy(() => import('./pages/Goods').then((m) => ({ default: m.Goods })))
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="/requisites" element={<Requisites />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/money" element={<Money />} />
+          <Route path="/payments" element={<Payments />} />
           <Route path="/documents" element={<Documents />} />
           <Route path="/contractors" element={<Contractors />} />
           <Route path="/goods" element={<Goods />} />

@@ -77,3 +77,6 @@ export const IconMenu = (p: IconProps) => (
 export const IconPatent = (p: IconProps) => (
   <svg {...base(p)}><rect x="4" y="4" width="16" height="12" rx="2" /><path d="M7 8h10M7 11h6" /><circle cx="16.5" cy="17.5" r="2.5" /><path d="M14.6 19.2L13.5 22l3-1.1 3 1.1-1.1-2.8" /></svg>
 )
+export const IconCard = (p: IconProps) => (
+  <svg {...base(p)}><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg>
+)
