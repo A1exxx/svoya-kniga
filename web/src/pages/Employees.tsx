@@ -649,7 +649,7 @@ function SalaryCalc({ year }: { year: number }) {
                     <th className="py-2 pr-3 text-right font-medium">Начислено</th>
                     <th className="py-2 pr-3 text-right font-medium">Удержано</th>
                     <th className="py-2 pr-3 text-right font-medium">Выдано</th>
-                    <th className="py-2 text-right font-medium">Аванс</th>
+                    <th className="py-2 text-right font-medium">Взносы</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -671,7 +671,7 @@ function SalaryCalc({ year }: { year: number }) {
                       <td className="tnum py-2 pr-3 text-right text-muted">{dec(mm.ndfl)}</td>
                       <td className="tnum py-2 pr-3 text-right font-medium text-ink">{dec(mm.net)}</td>
                       <td className="tnum py-2 text-right text-muted">
-                        {hasAdvance ? dec(mm.advance_net) : '—'}
+                        {dec(mm.vznosy.plus(mm.travmatizm))}
                       </td>
                     </tr>
                   ))}
@@ -684,7 +684,9 @@ function SalaryCalc({ year }: { year: number }) {
                     <td className="tnum py-2 pr-3 text-right">{dec(r.gross_year)}</td>
                     <td className="tnum py-2 pr-3 text-right text-muted">{dec(r.ndfl_year)}</td>
                     <td className="tnum py-2 pr-3 text-right">{dec(r.net_year)}</td>
-                    <td className="py-2"></td>
+                    <td className="tnum py-2 text-right text-muted">
+                      {dec(r.vznosy_year.plus(r.travmatizm_year))}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
