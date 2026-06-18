@@ -2,6 +2,11 @@ import { payrollSummary } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { Employee } from '../state/employeesStore'
+import { Cells, FormKndHeader, FormField, SignBlock, OfficialNote } from './officialForm'
+
+/** 'YYYY-MM-DD' → 'DDMMYYYY' (для клеточного поля даты). */
+const dmy = (iso?: string) => (iso ? iso.split('-').reverse().join('') : '')
+const digits = (s?: string) => (s ? s.replace(/\D/g, '') : '')
 
 export type ReportType = '6ndfl' | 'rsv' | 'efs1' | 'perssved'
 
@@ -128,38 +133,84 @@ export function PayrollReportDoc({
     )
   }
 
-  // perssved
+  // perssved — официальный макет КНД 1151162
   return (
     <div>
-      <Head org={org} title="Персонифицированные сведения о физических лицах" knd="1151162" />
-      <div className="mt-5 mb-2 font-semibold">Сведения о выплатах (за месяц)</div>
-      <table className="w-full border-collapse text-[12.5px]">
-        <thead>
-          <tr className="border-y border-slate-300 text-left">
-            <th className="py-1.5 pr-2 font-semibold">№</th>
-            <th className="py-1.5 pr-2 font-semibold">ФИО</th>
-            <th className="py-1.5 pr-2 font-semibold">Должность</th>
-            <th className="py-1.5 text-right font-semibold">Выплаты за месяц, ₽</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((a, i) => (
-            <tr key={a.e.id} className="border-b border-slate-200">
-              <td className="py-1.5 pr-2">{i + 1}</td>
-              <td className="py-1.5 pr-2">{a.e.fio || '—'}</td>
-              <td className="py-1.5 pr-2">{a.e.position || '—'}</td>
-              <td className="tnum py-1.5 text-right">{r2(a.grossMonth)}</td>
-            </tr>
-          ))}
-          <tr className="border-t-2 border-slate-300 font-semibold">
-            <td className="py-1.5 pr-2" colSpan={3}>
-              Итого
-            </td>
-            <td className="tnum py-1.5 text-right">{r2(totals.grossMonth)}</td>
-          </tr>
-        </tbody>
-      </table>
-      <Note2 />
+      <FormKndHeader
+        knd="1151162"
+        title="Персонифицированные сведения о физических лицах"
+        inn={org.inn}
+      />
+      <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+        <FormField label="Номер корректировки">
+          <Cells value="0" count={3} />
+        </FormField>
+        <FormField label="Отчётный период (месяц)">
+          <Cells count={2} />
+        </FormField>
+        <FormField label="Представляется в налоговый орган (код)">
+          <Cells value={org.taxOfficeCode} count={4} />
+        </FormField>
+        <FormField label="Отчётный (календарный) год">
+          <Cells value={String(org.year)} count={4} />
+        </FormField>
+        <FormField label="По месту нахождения (учёта) (код)">
+          <span className="text-[12px]">120 — по месту жительства ИП</span>
+        </FormField>
+        <FormField label="Налогоплательщик">
+          <span className="text-[12px]">{org.fio || org.name || '—'}</span>
+        </FormField>
+        <FormField label="Код вида деятельности по ОКВЭД">
+          <span className="text-[12px]">{org.okved || '—'}</span>
+        </FormField>
+        <FormField label="Количество физических лиц">
+          <Cells value={String(n)} count={3} />
+        </FormField>
+      </div>
+
+      <div className="mt-5 mb-2 text-[12px] font-semibold">
+        Сведения о физических лицах и суммах выплат
+      </div>
+      <div className="space-y-2">
+        {rows.map((a, i) => {
+          const [last = '', first = '', middle = ''] = (a.e.fio || '').trim().split(/\s+/)
+          return (
+            <div key={a.e.id} className="rounded border border-slate-300 p-2.5">
+              <div className="mb-1 text-[11px] text-slate-400">Физическое лицо {i + 1}</div>
+              <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
+                <FormField label="010. ИНН в РФ">
+                  <Cells count={12} />
+                </FormField>
+                <FormField label="020. СНИЛС">
+                  <Cells value={digits(a.e.snils)} count={11} />
+                </FormField>
+                <FormField label="030. Фамилия">
+                  <span className="text-[12px]">{last || '—'}</span>
+                </FormField>
+                <FormField label="040. Имя">
+                  <span className="text-[12px]">{first || '—'}</span>
+                </FormField>
+                <FormField label="050. Отчество">
+                  <span className="text-[12px]">{middle || '—'}</span>
+                </FormField>
+                <FormField label="060. Дата рождения">
+                  <Cells value={dmy(a.e.birthDate)} count={8} />
+                </FormField>
+                <FormField label="070. Сумма выплат и иных вознаграждений">
+                  <span className="tnum font-semibold">{formatRub(a.grossMonth, { kopecks: true })}</span>
+                </FormField>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-2 flex justify-between border-t-2 border-slate-300 pt-1.5 text-[12px] font-semibold">
+        <span>Итого выплат за месяц по {n} лицам</span>
+        <span className="tnum">{r2(totals.grossMonth)}</span>
+      </div>
+
+      <SignBlock name={org.fio || org.name} />
+      <OfficialNote extra="Персонифицированные сведения подаются ежемесячно до 25 числа." />
     </div>
   )
 }

@@ -2,6 +2,10 @@ import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { VatResult } from '../lib/taxcore'
 import { sumVat, type VatBooks, type VatBookLine } from '../lib/vatBooks'
+import { Cells, FormKndHeader, FormField, SignBlock, OfficialNote } from './officialForm'
+
+/** Код строки раздела 3 по ставке НДС (по бланку КНД 1151001 ред. 2025–2026). */
+const RATE_CODE: Record<number, string> = { 22: '003', 20: '010', 10: '020', 7: '021', 5: '022' }
 
 const r0 = (n: number) => formatRub(Math.round(n))
 const rk = (n: number) => formatRub(n, { kopecks: true })
@@ -80,13 +84,34 @@ function L({ code, label, value }: { code: string; label: string; value: string 
 export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResult; books?: VatBooks }) {
   const rate = vat.rate.toNumber()
   const special = vat.mode === 'rate5' || vat.mode === 'rate7'
+  const rateCode = RATE_CODE[rate] ?? '010'
+  const assessed = Math.round((vat.base.toNumber() * rate) / 100)
   return (
     <div>
-      <div className="text-center text-base font-semibold">Налоговая декларация по налогу на добавленную стоимость</div>
-      <div className="mt-1 text-center text-xs text-slate-500">Форма по КНД 1151001 · {org.year} год</div>
-      <div className="mt-2 text-center text-[13px] text-slate-600">
-        {org.fio || org.name || '—'}{org.inn && `, ИНН ${org.inn}`}
-        {org.oktmo && ` · ОКТМО ${org.oktmo}`}
+      <FormKndHeader
+        knd="1151001"
+        title="Налоговая декларация по налогу на добавленную стоимость"
+        inn={org.inn}
+      />
+      <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
+        <FormField label="Номер корректировки">
+          <Cells value="0" count={3} />
+        </FormField>
+        <FormField label="Налоговый период (код квартала)">
+          <Cells count={2} />
+        </FormField>
+        <FormField label="Представляется в налоговый орган (код)">
+          <Cells value={org.taxOfficeCode} count={4} />
+        </FormField>
+        <FormField label="Отчётный (календарный) год">
+          <Cells value={String(org.year)} count={4} />
+        </FormField>
+        <FormField label="По месту нахождения (учёта) (код)">
+          <span className="text-[12px]">116 — по месту учёта ИП</span>
+        </FormField>
+        <FormField label="Налогоплательщик">
+          <span className="text-[12px]">{org.fio || org.name || '—'}</span>
+        </FormField>
       </div>
 
       {vat.exempt ? (
@@ -102,21 +127,51 @@ export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResul
           <div className="mt-5 mb-2 font-semibold">Раздел 1. Сумма налога к уплате в бюджет</div>
           <table className="w-full text-[13px]">
             <tbody>
-              <L code="020" label="КБК" value="182 1 03 01000 01 1000 110" />
-              <L code="030" label="ОКТМО" value={org.oktmo || '—'} />
-              <L code="040" label="Сумма налога к уплате" value={r0(vat.vat.toNumber())} />
+              <L code="010" label="КБК" value="182 1 03 01000 01 1000 110" />
+              <L code="020" label="Код по ОКТМО" value={org.oktmo || '—'} />
+              <L code="040" label="Сумма налога к уплате (п. 1 ст. 173 НК)" value={r0(vat.vat.toNumber())} />
             </tbody>
           </table>
 
-          <div className="mt-5 mb-2 font-semibold">Раздел 3. Расчёт налога</div>
-          <table className="w-full text-[13px]">
+          <div className="mt-5 mb-2 font-semibold">Раздел 3. Расчёт суммы налога</div>
+          <table className="w-full border-collapse text-[12.5px]">
+            <thead>
+              <tr className="border-y border-slate-300 text-left">
+                <th className="py-1 pr-2 font-semibold">Объект налогообложения</th>
+                <th className="w-20 py-1 pr-2 font-semibold">Код строки</th>
+                <th className="py-1 pr-2 text-right font-semibold">Налоговая база</th>
+                <th className="w-16 py-1 pr-2 text-right font-semibold">Ставка</th>
+                <th className="py-1 text-right font-semibold">Сумма НДС</th>
+              </tr>
+            </thead>
             <tbody>
-              <L code="010" label={`Налоговая база (ставка ${rate}%)`} value={r0(vat.base.toNumber())} />
-              <L code="118" label="Сумма налога исчисленная" value={r0(vat.base.toNumber() * rate / 100)} />
+              <tr className="border-b border-slate-200">
+                <td className="py-1.5 pr-2">Реализация товаров (работ, услуг), передача прав</td>
+                <td className="py-1.5 pr-2 font-mono">{rateCode}</td>
+                <td className="tnum py-1.5 pr-2 text-right">{r0(vat.base.toNumber())}</td>
+                <td className="py-1.5 pr-2 text-right">{rate}%</td>
+                <td className="tnum py-1.5 text-right">{r0(assessed)}</td>
+              </tr>
+              <tr className="border-b border-slate-200 font-medium">
+                <td className="py-1.5 pr-2" colSpan={4}>
+                  Итого сумма налога, исчисленная (стр. 118)
+                </td>
+                <td className="tnum py-1.5 text-right">{r0(assessed)}</td>
+              </tr>
               {!special && (
-                <L code="190" label="Налоговые вычеты (входящий НДС)" value={r0(vat.input_vat_deducted.toNumber())} />
+                <tr className="border-b border-slate-200">
+                  <td className="py-1.5 pr-2" colSpan={4}>
+                    Налоговые вычеты, всего — входящий НДС (стр. 190)
+                  </td>
+                  <td className="tnum py-1.5 text-right">{r0(vat.input_vat_deducted.toNumber())}</td>
+                </tr>
               )}
-              <L code="200" label="Итого к уплате" value={r0(vat.vat.toNumber())} />
+              <tr className="border-t-2 border-slate-300 font-semibold">
+                <td className="py-1.5 pr-2" colSpan={4}>
+                  Итого к уплате в бюджет (стр. 200)
+                </td>
+                <td className="tnum py-1.5 text-right">{r0(vat.vat.toNumber())}</td>
+              </tr>
             </tbody>
           </table>
           {special && (
@@ -144,10 +199,8 @@ export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResul
         </>
       )}
 
-      <div className="mt-6 text-[11px] text-slate-400">
-        Демонстрационная форма (упрощённая). Разделы 8/9 формируются из книг покупок/продаж.
-        Реальная подача НДС — через оператора ЭДО. Перед сдачей сверьте с актуальной формой ФНС.
-      </div>
+      {!vat.exempt && vat.mode !== 'usn_lost' && <SignBlock name={org.fio || org.name} />}
+      <OfficialNote extra="Разделы 8/9 — из книг покупок/продаж. Реальная подача НДС — через оператора ЭДО." />
     </div>
   )
 }
