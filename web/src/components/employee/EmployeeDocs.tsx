@@ -1,8 +1,9 @@
-import { calcSalary } from '../../lib/taxcore'
+import { calcSalary, calcVacation, calcSickLeave } from '../../lib/taxcore'
 import { formatRub, formatDate } from '../../lib/format'
 import { employeeSalaryOptions } from '../../lib/payrollSummary'
-import { computeStazh, formatStazh } from '../../lib/stazh'
+import { computeStazh, formatStazh, stazhYearsFromHire } from '../../lib/stazh'
 import { periodDays } from '../../lib/vacation'
+import { vacationBase12m, sickBases } from '../../lib/earnings'
 import type { Org } from '../../state/orgStore'
 import type { Employee, VacationEvent, VacationType } from '../../state/employeesStore'
 
@@ -207,6 +208,51 @@ export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee 
   }
   const m = calc?.months[0]
   const hasAdv = (e.advancePercent ?? 0) > 0
+
+  // Начисления по событиям: отпускные (regular) и больничные — отдельными строками.
+  const year = org.year
+  const vacBase = vacationBase12m(e.earningsByYear, year) || e.salary * 12
+  const vacLines = (e.vacations ?? [])
+    .filter((vv) => vv.type === 'regular')
+    .map((vv) => {
+      const d = periodDays(vv.from, vv.to)
+      if (d <= 0) return null
+      try {
+        return { from: vv.from, to: vv.to, days: d, gross: calcVacation(year, vacBase, d).gross.toNumber() }
+      } catch {
+        return null
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+  const { e1, e2 } = sickBases(e.earningsByYear, year)
+  const stazh = stazhYearsFromHire(e.hireDate) ?? e.stazhYears ?? 0
+  const daysInMonthOf = (iso: string) => {
+    const [yy, mm] = iso.split('-').map(Number)
+    return yy && mm ? new Date(yy, mm, 0).getDate() : 31
+  }
+  const sickLines = (e.sickLeaves ?? [])
+    .map((s) => {
+      const d = periodDays(s.from, s.to)
+      if (d <= 0) return null
+      try {
+        const rr = calcSickLeave(year, e1, e2, stazh, d, 3, daysInMonthOf(s.from))
+        return {
+          from: s.from,
+          to: s.to,
+          days: d,
+          total: rr.total.toNumber(),
+          emp: rr.employer_part.toNumber(),
+          sfr: rr.sfr_part.toNumber(),
+        }
+      } catch {
+        return null
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+  const hasEvents = vacLines.length > 0 || sickLines.length > 0
+  const eventsTotal =
+    vacLines.reduce((s, x) => s + x.gross, 0) + sickLines.reduce((s, x) => s + x.total, 0)
+
   return (
     <div>
       <div className="text-center text-base font-semibold">Расчётный листок</div>
@@ -247,11 +293,41 @@ export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee 
           </tbody>
         </table>
       )}
+      {hasEvents && (
+        <table className="mt-4 w-full text-[13px]">
+          <tbody>
+            <tr className="border-b border-slate-300 font-semibold">
+              <td className="py-1.5">Начисления за период (отпуск, больничный)</td>
+              <td className="tnum py-1.5 text-right">{r0(eventsTotal)}</td>
+            </tr>
+            {vacLines.map((x, i) => (
+              <tr key={'v' + i} className="border-b border-slate-200">
+                <td className="py-1.5 pl-4 text-slate-600">
+                  Отпускные — {x.days} дн. ({formatDate(x.from)}–{formatDate(x.to)})
+                </td>
+                <td className="tnum py-1.5 text-right">{r0(x.gross)}</td>
+              </tr>
+            ))}
+            {sickLines.map((x, i) => (
+              <tr key={'s' + i} className="border-b border-slate-200 align-top">
+                <td className="py-1.5 pl-4 text-slate-600">
+                  Больничный — {x.days} дн. ({formatDate(x.from)}–{formatDate(x.to)})
+                  <div className="text-[11px] text-slate-400">
+                    в т.ч. за счёт работодателя {r0(x.emp)}, СФР {r0(x.sfr)}
+                  </div>
+                </td>
+                <td className="tnum py-1.5 text-right">{r0(x.total)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
       {m && (
         <p className="mt-3 text-[12px] text-slate-500">
           Справочно: страховые взносы работодателя {r0(m.vznosy.toNumber())} + травматизм{' '}
-          {r0(m.travmatizm.toNumber())} (с работника не удерживаются). Отпускные и больничные
-          добавляются в листок при наличии таких событий у сотрудника.
+          {r0(m.travmatizm.toNumber())} (с работника не удерживаются).
+          {!hasEvents &&
+            ' Отпускные и больничные появятся отдельными строками при наличии таких событий у сотрудника.'}
         </p>
       )}
       <div className="mt-8 text-[13px]">

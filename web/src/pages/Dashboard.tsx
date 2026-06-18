@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
+import { calcSalary } from '../lib/taxcore'
+import { employeeSalaryOptions } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
@@ -118,6 +120,25 @@ export function Dashboard() {
     )
   }
 
+  // Зарплата сотрудникам: даты выдачи аванса/зарплаты и суммы на руки (напоминание).
+  const salaryRows = employees
+    .map((e) => {
+      try {
+        const m = calcSalary(o.year, e.salary, employeeSalaryOptions(e)).months[0]
+        if (!m) return null
+        return {
+          e,
+          net: m.net.toNumber(),
+          advNet: m.advance_net.toNumber(),
+          setNet: m.settlement_net.toNumber(),
+          hasAdv: (e.advancePercent ?? 0) > 0,
+        }
+      } catch {
+        return null
+      }
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+
   // Налоговая копилка: сколько откладывать с каждого поступления на налог + взносы.
   const obligation = c ? c.usn.tax_year_final.toNumber() + c.contr.total.toNumber() : 0
   const piggyIncome = c ? (c.quarterly ? c.byQuarter.reduce((s, q) => s + q.income, 0) : o.income) : 0
@@ -178,6 +199,41 @@ export function Dashboard() {
               {piggyPct}% с каждого прихода, к 28 апреля и 28 декабря деньги уже будут отложены — как
               «копилка» в Точке.
             </p>
+          </Card>
+        </div>
+      )}
+
+      {salaryRows.length > 0 && (
+        <div className="mb-6">
+          <Card title="Зарплата сотрудникам">
+            <p className="mb-2 text-xs text-muted">
+              Даты выдачи аванса и зарплаты по сотрудникам. НДФЛ удерживается при каждой выплате.
+            </p>
+            <div className="space-y-1.5">
+              {salaryRows.map(({ e, net, advNet, setNet, hasAdv }) => (
+                <div
+                  key={e.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-line px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-ink">{e.fio || 'Сотрудник'}</span>
+                  <span className="text-muted">
+                    {hasAdv ? (
+                      <>
+                        аванс {e.advanceDay ?? 25}-го:{' '}
+                        <span className="tnum font-medium text-ink">{formatRub(advNet)}</span> ·
+                        зарплата {e.salaryDay ?? 10}-го:{' '}
+                        <span className="tnum font-medium text-ink">{formatRub(setNet)}</span>
+                      </>
+                    ) : (
+                      <>
+                        зарплата {e.salaryDay ?? 10}-го:{' '}
+                        <span className="tnum font-medium text-ink">{formatRub(net)}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
           </Card>
         </div>
       )}

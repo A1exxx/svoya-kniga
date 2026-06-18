@@ -66,30 +66,29 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
         <div className="mt-1 text-xs text-slate-500">Форма по КНД 1152017</div>
       </div>
 
-      <table className="mt-5 w-full text-[13px]">
+      <div className="mt-5 mb-2 font-semibold">Титульный лист</div>
+      <table className="w-full text-[13px]">
         <tbody>
-          <tr>
-            <td className="py-1 text-slate-500">Налоговый период (год)</td>
-            <td className="py-1 text-right font-medium">{org.year}</td>
-          </tr>
-          <tr>
-            <td className="py-1 text-slate-500">Налогоплательщик</td>
-            <td className="py-1 text-right font-medium">{org.fio || org.name || '—'}</td>
-          </tr>
-          <tr>
-            <td className="py-1 text-slate-500">ИНН</td>
-            <td className="py-1 text-right font-medium">{org.inn || '—'}</td>
-          </tr>
-          <tr>
-            <td className="py-1 text-slate-500">Объект налогообложения</td>
-            <td className="py-1 text-right font-medium">
-              {isIncome ? 'Доходы' : 'Доходы, уменьшенные на расходы'}
-            </td>
-          </tr>
-          <tr>
-            <td className="py-1 text-slate-500">Ставка налога</td>
-            <td className="py-1 text-right font-medium">{ratePct}%</td>
-          </tr>
+          {[
+            ['ИНН', org.inn || '—'],
+            ['КПП', '— (для ИП не заполняется)'],
+            ['Номер корректировки', '0 - -'],
+            ['Налоговый период (код)', '34 — Календарный год'],
+            ['Отчётный год', String(org.year)],
+            ['Представляется в налоговый орган (код)', org.taxOfficeCode || '—'],
+            ['По месту нахождения (учёта) (код)', '120 — по месту жительства ИП'],
+            ['Налогоплательщик', org.fio || org.name || '—'],
+            ['Код вида деятельности по ОКВЭД', org.okved || '—'],
+            ['Номер контактного телефона', org.phone || '—'],
+            ['Объект налогообложения', isIncome ? 'Доходы' : 'Доходы, уменьшенные на расходы'],
+            ['Ставка налога', `${ratePct}%`],
+            ['Достоверность сведений подтверждаю', '1 — налогоплательщик'],
+          ].map(([k, val]) => (
+            <tr key={k} className="border-b border-slate-100">
+              <td className="py-1 pr-3 text-slate-500">{k}</td>
+              <td className="py-1 text-right font-medium">{val}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
 
@@ -99,6 +98,7 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
           {isIncome ? (
             quarterly ? (
               <>
+                <Line code="102" label="Признак налогоплательщика (1 — выплаты физлицам, 2 — без выплат)" value={org.hasEmployees ? '1' : '2'} />
                 <Line code="110" label="Доходы за 1 квартал" value={pv(0, (p) => p.tax_base_cumulative)} />
                 <Line code="111" label="Доходы за полугодие" value={pv(1, (p) => p.tax_base_cumulative)} />
                 <Line code="112" label="Доходы за 9 месяцев" value={pv(2, (p) => p.tax_base_cumulative)} />
@@ -115,6 +115,7 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
               </>
             ) : (
               <>
+                <Line code="102" label="Признак налогоплательщика (1 — выплаты физлицам, 2 — без выплат)" value={org.hasEmployees ? '1' : '2'} />
                 <Line code="113" label="Сумма полученных доходов за налоговый период" value={v(yearP.tax_base_cumulative)} />
                 <Line code="123" label="Ставка налога (%)" value={`${ratePct}`} />
                 <Line code="133" label="Сумма исчисленного налога за год" value={v(yearP.tax_before_deduction_cumulative)} />
@@ -158,6 +159,7 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
       </div>
       <table className="w-full">
         <tbody>
+          <Line code="010/030/060/090" label="Код по ОКТМО" value={org.oktmo || '—'} />
           {quarterly ? (
             <>
               <Line code="020" label="Аванс к уплате за 1 квартал" value={pv(0, (p) => p.advance_due_this_period)} />
@@ -203,11 +205,13 @@ export function DeclarationDoc({ org, computed }: { org: Org; computed: Computed
           Подпись: ______________ / {org.fio || org.name}
         </div>
         <div className="max-w-[60%] text-right">
-          Предпросмотр (демо-режим).{' '}
+          Официальный бланк (КНД 1152017).{' '}
           {quarterly
             ? 'Поквартальные суммы заполнены из операций в «Деньгах».'
             : 'Годовые показатели заполнены из расчёта; поквартальные — при учёте операций.'}{' '}
-          Перед подачей сверьте с бухгалтером.
+          Для подачи скачайте XML и загрузите в программу ФНС «Налогоплательщик ЮЛ» либо в ЛК ФНС —
+          она напечатает машиночитаемый бланк с двумерным штрих-кодом. Перед подачей сверьте с
+          бухгалтером.
         </div>
       </div>
     </div>
