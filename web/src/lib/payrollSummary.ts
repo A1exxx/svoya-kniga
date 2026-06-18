@@ -2,7 +2,7 @@
  * Агрегация зарплаты по всему штату — единый источник для «Сводки по штату»,
  * расчётно-платёжной ведомости и отчётов за сотрудников (6-НДФЛ/РСВ/ЕФС-1/перс.сведения).
  */
-import { calcSalary, type CalcSalaryOptions } from './taxcore'
+import { calcSalary, workdaysInMonth, type CalcSalaryOptions } from './taxcore'
 import type { Org } from '../state/orgStore'
 import type { Employee } from '../state/employeesStore'
 
@@ -31,13 +31,27 @@ export interface PayrollSummary {
   count: number
 }
 
-/** Опции calcSalary из карточки сотрудника (единый источник: оклад, дети, МСП, аванс). */
-export function employeeSalaryOptions(e: Employee): CalcSalaryOptions {
+/**
+ * Опции calcSalary из карточки сотрудника (единый источник: оклад, дети, МСП, аванс).
+ * Если передан `year` и у сотрудника заданы отработанные дни по месяцам — пробрасываем
+ * monthFactors, чтобы отчёты/сводка считали так же, как вкладка «Зарплата» (помесячно по
+ * рабочим дням), а не полную проекцию 12×оклад.
+ */
+export function employeeSalaryOptions(e: Employee, year?: number): CalcSalaryOptions {
+  const wd = year != null ? e.workedDaysByYear?.[year] : undefined
+  const monthFactors = wd
+    ? Array.from({ length: 12 }, (_, i) => {
+        const n = workdaysInMonth(year as number, i + 1)
+        const d = wd[i]
+        return d == null || !n ? 1 : Math.min(Math.max(d, 0), n) / n
+      })
+    : undefined
   return {
     children: e.children,
     msp: e.msp,
     advancePercent: (e.advancePercent ?? 0) / 100, // в карточке хранится в %, calcSalary ждёт долю
     advanceDay: e.advanceDay,
+    monthFactors,
   }
 }
 
@@ -76,7 +90,7 @@ export function payrollSummary(
   const rows: EmployeeAgg[] = list.map((e) => {
     const agg: EmployeeAgg = { e, ...EMPTY }
     try {
-      const c = calcSalary(org.year, e.salary, employeeSalaryOptions(e))
+      const c = calcSalary(org.year, e.salary, employeeSalaryOptions(e, org.year))
       agg.grossYear = c.gross_year.toNumber()
       agg.ndflYear = c.ndfl_year.toNumber()
       agg.advanceNdflYear = c.advance_ndfl_year.toNumber()

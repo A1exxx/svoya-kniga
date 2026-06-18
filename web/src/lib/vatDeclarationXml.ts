@@ -52,6 +52,9 @@ export function vatDeclarationXml(
   const inn = org.inn || ''
   const oktmo = org.oktmo || '00000000'
   const toPay = rub(vat.vat)
+  // Раздел 3 «СумНал» — ИСЧИСЛЕННЫЙ налог (до вычета): output = к уплате + входящий вычет.
+  // Тогда инвариант формы: СумНал − ВычетВходящий == Раздел1/НалПУ (без двойного вычета).
+  const assessed = rub(vat.vat.plus(vat.input_vat_deducted))
   const base = rub(vat.base)
   const rate = vat.rate.toNumber()
   const special = vat.mode === 'rate5' || vat.mode === 'rate7'
@@ -68,7 +71,7 @@ export function vatDeclarationXml(
     `    <СвНП><НПИП ИННФЛ="${esc(inn)}"/></СвНП>`,
     '    <НДС>',
     `      <Раздел1 ОКТМО="${esc(oktmo)}" КБК="18210301000011000110" НалПУ="${toPay}"/>`,
-    `      <Раздел3 НалБаза="${base}" Ставка="${rate}" СумНал="${toPay}" ` +
+    `      <Раздел3 НалБаза="${base}" Ставка="${rate}" СумНал="${assessed}" ` +
       `ВычетВходящий="${rub(vat.input_vat_deducted)}"/>`,
     ...sec8,
     ...sec9,

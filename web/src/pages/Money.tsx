@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { useOrg } from '../state/orgStore'
 import { useOps, type Operation } from '../state/opsStore'
 import { useDocs, docTotals } from '../state/docsStore'
+import { usePayments } from '../state/paymentsStore'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
@@ -30,7 +31,18 @@ export function Money() {
   const { activeOrg, updateActiveOrg } = useOrg()
   const { ops, addOp, removeOp, updateOp } = useOps()
   const { docs, updateDoc } = useDocs()
+  const { payments, updatePayment } = usePayments()
   const [draft, setDraft] = useState<Draft>(emptyDraft())
+
+  // Удаление операции, связанной со счётом/платёжкой, должно снять у них статус «Оплачен»
+  // и сбросить linkedOpId — иначе документ навсегда залипает «Оплачен» с битой ссылкой.
+  const removeOpCascade = (opId: string) => {
+    const d = docs.find((x) => x.linkedOpId === opId)
+    if (d) updateDoc(d.id, { paymentStatus: 'unpaid', paidDate: undefined, linkedOpId: undefined })
+    const p = payments.find((x) => x.linkedOpId === opId)
+    if (p) updatePayment(p.id, { status: 'pending', paidDate: '', linkedOpId: undefined })
+    removeOp(opId)
+  }
   const [printKudir, setPrintKudir] = useState(false)
   const [applied, setApplied] = useState(false)
 
@@ -571,7 +583,7 @@ export function Money() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeOp(o.id)}
+                          onClick={() => removeOpCascade(o.id)}
                           className="cursor-pointer text-xs text-slate-400 transition-colors hover:text-danger"
                         >
                           удалить

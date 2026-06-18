@@ -6,7 +6,7 @@ import {
   type VacationType,
   type VacationEvent,
 } from '../state/employeesStore'
-import { periodDays, accruedVacationDays } from '../lib/vacation'
+import { periodDays, accruedVacationDays, sickDayFloors } from '../lib/vacation'
 import { VacationOrderDoc, VacationScheduleDoc } from '../components/employee/EmployeeDocs'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation, workdaysInMonth } from '../lib/taxcore'
 import { formatRub, formatDate } from '../lib/format'
@@ -115,7 +115,7 @@ function StaffRoster({ year }: { year: number }) {
   let calc: ReturnType<typeof calcSalary> | null = null
   if (selected) {
     try {
-      calc = calcSalary(year, selected.salary, employeeSalaryOptions(selected))
+      calc = calcSalary(year, selected.salary, employeeSalaryOptions(selected, year))
     } catch {
       calc = null
     }
@@ -474,6 +474,15 @@ function SalaryCalc({ year }: { year: number }) {
 
   const norm = (mi: number) => workdaysInMonth(year, mi + 1)
   const [worked, setWorked] = useState<number[]>(() => Array.from({ length: 12 }, (_, i) => norm(i)))
+
+  // При смене года/ИП пересинхронизируем «отработано» под нормы нового года (иначе
+  // абсолютные дни старого года делятся на новые нормы → неверная доля).
+  useEffect(() => {
+    const e = employees.find((x) => x.id === selId)
+    const wd = e?.workedDaysByYear?.[year]
+    setWorked(Array.from({ length: 12 }, (_, i) => (wd && wd[i] != null ? wd[i] : norm(i))))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [year])
 
   const pick = (e: Employee | null) => {
     setSelId(e?.id ?? '')
@@ -881,7 +890,7 @@ function SickCalc({ year }: { year: number }) {
 
   let r: ReturnType<typeof calcSickLeave> | null = null
   try {
-    r = days > 0 ? calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month)) : null
+    r = days > 0 ? calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month), sickDayFloors(from, days)) : null
   } catch {
     r = null
   }

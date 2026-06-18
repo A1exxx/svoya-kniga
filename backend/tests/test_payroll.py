@@ -149,6 +149,18 @@ def test_sick_leave_not_below_mrot():
     assert r.total >= 22_000
 
 
+def test_sick_leave_mrot_floor_cross_month():
+    # Болезнь 4 дня через границу месяца: 2 в феврале (28), 2 в марте (31).
+    # При низком заработке пол МРОТ связывает; делитель зависит от месяца дня.
+    single = calc_sick_leave(2026, 0, 0, 6, 4, 3, 28)
+    cross = calc_sick_leave(2026, 0, 0, 6, 4, 3, 28, day_floors=[28, 28, 31, 31])
+    same = calc_sick_leave(2026, 0, 0, 6, 4, 3, 28, day_floors=[28, 28, 28, 28])
+    assert cross.daily_benefit > 0
+    assert cross.total < single.total            # мартовские дни делятся на 31, а не на 28
+    assert same.total == single.total            # равные делители == единый (нет регресса)
+    assert same.employer_part == single.employer_part
+
+
 def test_alimony_no_children_is_zero():
     r = calc_alimony(salary_gross=100_000, ndfl=13_000, children=0)
     assert r.alimony == 0

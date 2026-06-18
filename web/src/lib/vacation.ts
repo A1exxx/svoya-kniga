@@ -11,6 +11,21 @@ export function periodDays(from: string, to: string): number {
   return Math.round((b - a) / 86_400_000) + 1
 }
 
+/**
+ * Для каждого дня больничного с даты `from` — число календарных дней в его месяце
+ * (для МРОТ-пола пособия по ст. 6.1 ФЗ № 255-ФЗ при переходе через границу месяца).
+ */
+export function sickDayFloors(from: string, days: number): number[] {
+  const [y, m, d] = (from || '').split('-').map(Number)
+  if (!y || !m || !d || days <= 0) return []
+  const out: number[] = []
+  for (let i = 0; i < days; i++) {
+    const dt = new Date(y, m - 1, d + i)
+    out.push(new Date(dt.getFullYear(), dt.getMonth() + 1, 0).getDate())
+  }
+  return out
+}
+
 /** Полных месяцев работы с даты приёма по asOf (за полный год = 12). */
 export function monthsWorked(hireDate: string, asOf: Date): number {
   if (!hireDate) return 0

@@ -85,7 +85,10 @@ export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResul
   const rate = vat.rate.toNumber()
   const special = vat.mode === 'rate5' || vat.mode === 'rate7'
   const rateCode = RATE_CODE[rate] ?? '010'
-  const assessed = Math.round((vat.base.toNumber() * rate) / 100)
+  // Исчисленный НДС (стр.118) = к уплате + входящий вычет (для спец-ставок вычет=0).
+  // Берём из taxcore, а не пересчитываем из округлённой базы — иначе стр.118 и стр.200
+  // могут разойтись на ±1 ₽ внутри одной формы.
+  const assessed = vat.vat.toNumber() + vat.input_vat_deducted.toNumber()
   return (
     <div>
       <FormKndHeader

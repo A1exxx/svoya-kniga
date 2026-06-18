@@ -1,9 +1,9 @@
 import { useState } from 'react'
 import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
-import { useOrg } from '../state/orgStore'
+import { useOrg, type OrgVatMode } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
-import { getParams, calcVatUsn, type UsnObject, type VatMode } from '../lib/taxcore'
+import { getParams, calcVatUsn, type UsnObject } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -31,7 +31,6 @@ export function Taxes() {
   const o = activeOrg
   const [modal, setModal] = useState<'decl' | 'ens' | 'send' | null>(null)
   const [sendTitle, setSendTitle] = useState('Декларация по УСН')
-  const [vatMode, setVatMode] = useState<VatMode>(activeOrg.vatMode)
 
   let computed: ReturnType<typeof compute> | null = null
   let error: string | null = null
@@ -59,7 +58,7 @@ export function Taxes() {
 
   let vatRes: ReturnType<typeof calcVatUsn> | null = null
   try {
-    vatRes = calcVatUsn(o.year, vatIncome, { mode: vatMode })
+    vatRes = calcVatUsn(o.year, vatIncome, { mode: o.vatMode })
   } catch {
     vatRes = null
   }
@@ -295,14 +294,14 @@ export function Taxes() {
                       ['rate7', '7%'],
                       ['rate10', '10%'],
                       ['general', `${params ? params.vat_general_rate.toNumber() : 22}%`],
-                    ] as [VatMode, string][]
+                    ] as [OrgVatMode, string][]
                   ).map(([val, label]) => (
                     <button
                       key={val}
                       type="button"
-                      onClick={() => setVatMode(val)}
+                      onClick={() => updateActiveOrg({ vatMode: val })}
                       className={`cursor-pointer rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
-                        vatMode === val
+                        o.vatMode === val
                           ? 'border-brand-500 bg-brand-50 text-brand-600'
                           : 'border-line text-muted hover:border-slate-300'
                       }`}

@@ -31,7 +31,7 @@ const ENS_PAYEE = {
 
 export function Payments() {
   const { activeOrg } = useOrg()
-  const { addOp } = useOps()
+  const { addOp, removeOp } = useOps()
   const { contractors } = useContractors()
   const { payments, addPayment, updatePayment, removePayment } = usePayments()
 
@@ -320,7 +320,12 @@ export function Payments() {
                         )}
                         <button
                           type="button"
-                          onClick={() => removePayment(p.id)}
+                          onClick={() => {
+                            // Удаляем и связанный расход в «Деньгах» (иначе осиротевший
+                            // расход продолжит уменьшать базу УСН без первичной платёжки).
+                            if (p.linkedOpId) removeOp(p.linkedOpId)
+                            removePayment(p.id)
+                          }}
                           className="cursor-pointer text-xs text-slate-400 transition-colors hover:text-danger"
                         >
                           удалить

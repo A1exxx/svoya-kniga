@@ -213,6 +213,23 @@ describe('calcSickLeave — базовый', () => {
   });
 });
 
+describe('calcSickLeave — МРОТ-пол при переходе через границу месяца (2026)', () => {
+  // Низкий заработок → дневное пособие упирается в МРОТ-пол, делитель которого зависит
+  // от числа дней КОНКРЕТНОГО месяца. Болезнь 4 дня: 2 в феврале (28), 2 в марте (31).
+  const single = calcSickLeave(2026, 0, 0, 6, 4, 3, 28)
+  const cross = calcSickLeave(2026, 0, 0, 6, 4, 3, 28, [28, 28, 31, 31])
+  const same = calcSickLeave(2026, 0, 0, 6, 4, 3, 28, [28, 28, 28, 28])
+
+  it('МРОТ-пол связывает (нулевой заработок)', () =>
+    expect(cross.daily_benefit.toNumber()).toBeGreaterThan(0))
+  it('кросс-месячный итог НИЖЕ старого (мартовские дни делятся на 31, не на 28)', () =>
+    expect(cross.total.toNumber()).toBeLessThan(single.total.toNumber()))
+  it('равные делители подённо == единый делитель (нет регресса)', () => {
+    expect(same.total.toNumber()).toBe(single.total.toNumber())
+    expect(same.employer_part.toNumber()).toBe(single.employer_part.toNumber())
+  })
+})
+
 describe('calcSickLeave — максимальный потолок 2025', () => {
   const r = calcSickLeave(2025, 9_000_000, 9_000_000, 10, 1);
 

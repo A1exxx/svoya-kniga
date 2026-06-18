@@ -2,7 +2,7 @@ import { calcSalary, calcVacation, calcSickLeave } from '../../lib/taxcore'
 import { formatRub, formatDate } from '../../lib/format'
 import { employeeSalaryOptions } from '../../lib/payrollSummary'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../../lib/stazh'
-import { periodDays } from '../../lib/vacation'
+import { periodDays, sickDayFloors } from '../../lib/vacation'
 import { vacationBase12m, sickBases } from '../../lib/earnings'
 import type { Org } from '../../state/orgStore'
 import type { Employee, VacationEvent, VacationType } from '../../state/employeesStore'
@@ -170,7 +170,7 @@ export function HireOrderDoc({ org, employee: e }: { org: Org; employee: Employe
 export function IncomeCertDoc({ org, employee: e }: { org: Org; employee: Employee }) {
   let calc: ReturnType<typeof calcSalary> | null = null
   try {
-    calc = calcSalary(org.year, e.salary, employeeSalaryOptions(e))
+    calc = calcSalary(org.year, e.salary, employeeSalaryOptions(e, org.year))
   } catch {
     calc = null
   }
@@ -268,7 +268,7 @@ export function DeductionApplicationDoc({ org, employee: e }: { org: Org; employ
 export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee }) {
   let calc: ReturnType<typeof calcSalary> | null = null
   try {
-    calc = calcSalary(org.year, e.salary, employeeSalaryOptions(e))
+    calc = calcSalary(org.year, e.salary, employeeSalaryOptions(e, org.year))
   } catch {
     calc = null
   }
@@ -301,7 +301,7 @@ export function PayslipDoc({ org, employee: e }: { org: Org; employee: Employee 
       const d = periodDays(s.from, s.to)
       if (d <= 0) return null
       try {
-        const rr = calcSickLeave(year, e1, e2, stazh, d, 3, daysInMonthOf(s.from))
+        const rr = calcSickLeave(year, e1, e2, stazh, d, 3, daysInMonthOf(s.from), sickDayFloors(s.from, d))
         return {
           from: s.from,
           to: s.to,

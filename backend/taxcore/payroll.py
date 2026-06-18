@@ -426,6 +426,7 @@ def calc_sick_leave(
     sick_days: int,
     employer_days: int = 3,
     days_in_month: int = 31,
+    day_floors=None,
 ) -> SickLeaveResult:
     """Больничный: СДЗ = (заработок за 2 пред. года, каждый ≤ предельной базы) ÷ 730,
     с учётом стажа и ограничений мин/макс. Первые `employer_days` дней — за счёт работодателя."""
@@ -463,13 +464,28 @@ def calc_sick_leave(
     else:
         coeff = Decimal("0.6")
 
-    # Дневное пособие с учётом стажа, но не ниже МРОТ за полный месяц (ст. 6.1 ФЗ № 255-ФЗ).
-    mrot_daily_floor = p.mrot / Decimal(days_in_month)
-    daily_benefit = money(max(avg * coeff, mrot_daily_floor))
-    total = money(daily_benefit * sick_days)
+    # Дневное пособие с учётом стажа, но не ниже МРОТ-пола (ст. 6.1 ФЗ № 255-ФЗ).
+    # Пол = МРОТ / число календарных дней МЕСЯЦА; при переходе больничного через границу
+    # месяца делитель у дней разный — считаем подённо (day_floors[i] = дней в месяце i-го дня).
+    benefit_daily = avg * coeff
+
+    def floor_for(i: int) -> Decimal:
+        d = day_floors[i] if (day_floors and i < len(day_floors) and day_floors[i]) else days_in_month
+        return p.mrot / Decimal(d)
+
     emp_days = min(employer_days, sick_days)
-    employer_part = money(daily_benefit * emp_days)
+    total_raw = Decimal("0")
+    employer_raw = Decimal("0")
+    for i in range(sick_days):
+        d = money(max(benefit_daily, floor_for(i)))
+        total_raw += d
+        if i < emp_days:
+            employer_raw += d
+    total = money(total_raw)
+    employer_part = money(employer_raw)
     sfr_part = money(total - employer_part)
+    # Представительное дневное пособие (по основному месяцу) — для отображения.
+    daily_benefit = money(max(benefit_daily, p.mrot / Decimal(days_in_month)))
     ndfl = ndfl_progressive(total)
 
     return SickLeaveResult(

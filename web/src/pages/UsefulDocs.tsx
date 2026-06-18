@@ -59,7 +59,7 @@ export function UsefulDocs() {
   const ndflMap = new Map<string, { period: string; due: string; ratePct: number; amount: number }>()
   for (const e of staff) {
     try {
-      const sal = calcSalary(year, e.salary, employeeSalaryOptions(e))
+      const sal = calcSalary(year, e.salary, employeeSalaryOptions(e, year))
       for (const en of ndflPeriodEntries(sal)) {
         if (en.amount <= 0) continue
         const key = `${en.period}|${en.ratePct}`
@@ -86,7 +86,7 @@ export function UsefulDocs() {
   const vznosyByMonth = Array(13).fill(0) as number[]
   for (const e of staff) {
     try {
-      const sal = calcSalary(year, e.salary, employeeSalaryOptions(e))
+      const sal = calcSalary(year, e.salary, employeeSalaryOptions(e, year))
       for (const m of sal.months) vznosyByMonth[m.month] += m.vznosy.toNumber()
     } catch {
       /* пропускаем */

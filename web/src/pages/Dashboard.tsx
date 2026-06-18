@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
 import { calcSalary } from '../lib/taxcore'
-import { employeeSalaryOptions } from '../lib/payrollSummary'
+import { employeeSalaryOptions, isActiveInYear } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
@@ -122,9 +122,10 @@ export function Dashboard() {
 
   // Зарплата сотрудникам: даты выдачи аванса/зарплаты и суммы на руки (напоминание).
   const salaryRows = employees
+    .filter((e) => isActiveInYear(e, o.year))
     .map((e) => {
       try {
-        const m = calcSalary(o.year, e.salary, employeeSalaryOptions(e)).months[0]
+        const m = calcSalary(o.year, e.salary, employeeSalaryOptions(e, o.year)).months[0]
         if (!m) return null
         return {
           e,

@@ -336,6 +336,9 @@ export function Documents() {
                 <button
                   type="button"
                   onClick={() => {
+                    // Удаляем и связанную операцию в «Деньгах», иначе осиротевший
+                    // доход/расход останется в КУДиР и налоговой базе.
+                    if (selected.linkedOpId) removeOp(selected.linkedOpId)
                     removeDoc(selected.id)
                     setSelectedId(null)
                   }}

@@ -487,7 +487,8 @@ export function calcSickLeave(
   stazhYears: number,
   sickDays: number,
   employerDays = 3,
-  daysInMonth = 31
+  daysInMonth = 31,
+  dayFloors?: number[]
 ): SickLeaveResult {
   if (sickDays < 0) {
     throw new Error('Число дней болезни не может быть отрицательным');
@@ -530,13 +531,26 @@ export function calcSickLeave(
     coeff = new Decimal('0.6');
   }
 
-  // Дневное пособие с учётом стажа, но не ниже МРОТ за полный месяц (ст. 6.1 ФЗ № 255-ФЗ).
-  const mrotDailyFloor = p.mrot.div(new Decimal(daysInMonth));
-  const dailyBenefit = money(Decimal.max(avg.times(coeff), mrotDailyFloor));
-  const total = money(dailyBenefit.times(sickDays));
+  // Дневное пособие с учётом стажа, но не ниже МРОТ-пола (ст. 6.1 ФЗ № 255-ФЗ).
+  // Пол = МРОТ / число календарных дней МЕСЯЦА; при переходе больничного через границу
+  // месяца делитель у дней разный — поэтому считаем подённо (dayFloors[i] = дней в месяце
+  // i-го дня болезни). Без dayFloors поведение идентично прежнему (единый делитель).
+  const benefitDaily = avg.times(coeff);
+  const floorFor = (i: number) =>
+    p.mrot.div(new Decimal(dayFloors && dayFloors[i] ? dayFloors[i] : daysInMonth));
   const empDays = Math.min(employerDays, sickDays);
-  const employerPart = money(dailyBenefit.times(empDays));
+  let totalRaw = new Decimal('0');
+  let employerRaw = new Decimal('0');
+  for (let i = 0; i < sickDays; i++) {
+    const d = money(Decimal.max(benefitDaily, floorFor(i)));
+    totalRaw = totalRaw.plus(d);
+    if (i < empDays) employerRaw = employerRaw.plus(d);
+  }
+  const total = money(totalRaw);
+  const employerPart = money(employerRaw);
   const sfrPart = money(total.minus(employerPart));
+  // Представительное дневное пособие (по основному месяцу) — для отображения.
+  const dailyBenefit = money(Decimal.max(benefitDaily, p.mrot.div(new Decimal(daysInMonth))));
   const ndfl = ndflProgressive(total);
 
   return {
