@@ -143,3 +143,29 @@ export function dateToIso(date: Date): string {
 export function makeDate(year: number, month: number, day: number): Date {
   return new Date(Date.UTC(year, month - 1, day));
 }
+
+/**
+ * Норма рабочих дней по месяцам (5-дневная неделя) — официальный производственный
+ * календарь РФ с учётом переносов. Индекс 0 = январь.
+ * Сверено по consultant.ru / garant.ru / buh.1c (2025 и 2026, по 247 рабочих дней в году).
+ */
+export const WORKDAYS_BY_YEAR: Record<number, number[]> = {
+  2025: [17, 20, 21, 22, 18, 19, 23, 21, 22, 23, 19, 22],
+  2026: [15, 19, 21, 22, 19, 21, 23, 21, 22, 22, 20, 22],
+};
+
+/**
+ * Норма рабочих дней в месяце (month: 1..12). Для известного года — из официальной таблицы,
+ * иначе фолбэк: будние дни месяца минус праздники из HOLIDAYS_BY_YEAR (без субботних переносов).
+ */
+export function workdaysInMonth(year: number, month: number): number {
+  const table = WORKDAYS_BY_YEAR[year];
+  if (table && month >= 1 && month <= 12) return table[month - 1];
+  const hol = holidaySet(year);
+  const days = new Date(year, month, 0).getDate();
+  let n = 0;
+  for (let d = 1; d <= days; d++) {
+    if (!isNonWorkday(new Date(year, month - 1, d), hol)) n++;
+  }
+  return n;
+}

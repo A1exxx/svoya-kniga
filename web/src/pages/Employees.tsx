@@ -8,7 +8,7 @@ import {
 } from '../state/employeesStore'
 import { periodDays, accruedVacationDays } from '../lib/vacation'
 import { VacationOrderDoc } from '../components/employee/EmployeeDocs'
-import { calcAlimony, calcSalary, calcSickLeave, calcVacation } from '../lib/taxcore'
+import { calcAlimony, calcSalary, calcSickLeave, calcVacation, workdaysInMonth } from '../lib/taxcore'
 import { formatRub, formatDate } from '../lib/format'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
 import { sickBases, vacationBase12m } from '../lib/earnings'
@@ -462,13 +462,18 @@ function StaffRoster({ year }: { year: number }) {
 
 // ---- Зарплата ----
 function SalaryCalc({ year }: { year: number }) {
-  const { employees } = useEmployees()
+  const { employees, updateEmployee } = useEmployees()
   const { activeOrg } = useOrg()
   const [selId, setSelId] = useState('')
   const [gross, setGross] = useState(80_000)
   const [children, setChildren] = useState(0)
   const [msp, setMsp] = useState(true)
   const [advancePercent, setAdvancePercent] = useState(0)
+  const [selMonth, setSelMonth] = useState(() => Math.min(new Date().getMonth(), 11))
+  const [detail, setDetail] = useState(false)
+
+  const norm = (mi: number) => workdaysInMonth(year, mi + 1)
+  const [worked, setWorked] = useState<number[]>(() => Array.from({ length: 12 }, (_, i) => norm(i)))
 
   const pick = (e: Employee | null) => {
     setSelId(e?.id ?? '')
@@ -477,17 +482,37 @@ function SalaryCalc({ year }: { year: number }) {
       setChildren(e.children)
       setMsp(e.msp)
       setAdvancePercent(e.advancePercent ?? 0)
+      const wd = e.workedDaysByYear?.[year]
+      setWorked(Array.from({ length: 12 }, (_, i) => (wd && wd[i] != null ? wd[i] : norm(i))))
     }
   }
 
+  const setWorkedMonth = (mi: number, val: number) => {
+    const v = Math.max(0, Math.min(norm(mi), Math.round(val) || 0))
+    setWorked((w) => {
+      const next = w.slice()
+      next[mi] = v
+      if (selId) {
+        const e = employees.find((x) => x.id === selId)
+        const map = { ...(e?.workedDaysByYear ?? {}) }
+        map[year] = next
+        updateEmployee(selId, { workedDaysByYear: map })
+      }
+      return next
+    })
+  }
+
+  const factors = worked.map((d, i) => (norm(i) ? d / norm(i) : 1))
   let r: ReturnType<typeof calcSalary> | null = null
   try {
-    r = calcSalary(year, gross, { children, msp, advancePercent: advancePercent / 100 })
+    r = calcSalary(year, gross, { children, msp, advancePercent: advancePercent / 100, monthFactors: factors })
   } catch {
     r = null
   }
-  const m = r?.months[0]
+  const m = r?.months[selMonth]
   const hasAdvance = advancePercent > 0
+  const normSel = norm(selMonth)
+  const partial = worked[selMonth] !== normSel
 
   return (
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
@@ -520,65 +545,153 @@ function SalaryCalc({ year }: { year: number }) {
           {r && r.child_deduction_monthly.toNumber() > 0 && (
             <p className="text-xs text-muted">Вычет на детей: {dec(r.child_deduction_monthly)}/мес</p>
           )}
+          <Note>
+            Зарплата считается ПОМЕСЯЧНО из отработанных рабочих дней (производственный календарь{' '}
+            {year}). Полный месяц — полный оклад; неполный — пропорционально. Выберите месяц ниже и
+            при необходимости измените «Отработано».
+          </Note>
         </div>
       </Card>
 
       {m && r && (
         <div className="space-y-5">
-          <Card>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <div className="text-sm text-muted">На руки / мес</div>
-                <div className="tnum mt-1 text-2xl font-semibold text-ink">{dec(m.net)}</div>
+          {/* Текущий месяц */}
+          <Card
+            title={`${MONTH_NAMES[selMonth]} ${year}`}
+            right={
+              <select
+                className="cursor-pointer rounded-lg border border-line px-2 py-1.5 text-sm text-ink"
+                value={selMonth}
+                onChange={(e) => setSelMonth(Number(e.target.value))}
+              >
+                {MONTH_NAMES.map((mn, i) => (
+                  <option key={i} value={i}>
+                    {mn} {year}
+                  </option>
+                ))}
+              </select>
+            }
+          >
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
+              <span className="text-muted">Отработано</span>
+              <input
+                type="number"
+                min={0}
+                max={normSel}
+                value={worked[selMonth]}
+                onChange={(e) => setWorkedMonth(selMonth, Number(e.target.value))}
+                className="w-16 rounded-lg border border-line px-2 py-1 text-center text-sm text-ink"
+              />
+              <span className="text-muted">из {normSel} рабочих дней</span>
+              {partial && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-warn">
+                  неполный месяц — оклад пропорционально
+                </span>
+              )}
+            </div>
+            <Row label="Оклад (полный месяц)" value={formatRub(gross)} />
+            <Row label="Всего начислено" hint={partial ? `${worked[selMonth]}/${normSel} дн.` : undefined} value={dec(m.gross)} strong />
+            <Row label="− Вычтен НДФЛ" hint="нарастающим итогом за год" value={dec(m.ndfl)} />
+            <Row label="= Итого к выдаче" value={dec(m.net)} strong />
+            {hasAdvance && (
+              <div className="mt-1 text-xs text-muted">
+                в т.ч. аванс {advancePercent}% ({dec(m.advance_gross)}) — на руки {dec(m.advance_net)};
+                зарплата — на руки {dec(m.settlement_net)}
               </div>
-              <div>
-                <div className="text-sm text-muted">НДФЛ / мес</div>
-                <div className="tnum mt-1 text-2xl font-semibold text-ink">{dec(m.ndfl)}</div>
-              </div>
-              <div>
-                <div className="text-sm text-muted">Взносы / мес</div>
-                <div className="tnum mt-1 text-2xl font-semibold text-brand-600">
-                  {dec(m.vznosy.plus(m.travmatizm))}
+            )}
+            <button
+              type="button"
+              onClick={() => setDetail((v) => !v)}
+              className="mt-3 cursor-pointer text-sm font-medium text-brand-600 hover:underline"
+            >
+              {detail ? 'Скрыть подробный расчёт ▴' : 'Подробный расчёт ▾'}
+            </button>
+            {detail && (
+              <div className="mt-3 border-t border-line pt-3">
+                {hasAdvance && (
+                  <>
+                    <Row label="Аванс (гросс)" value={dec(m.advance_gross)} />
+                    <Row label="− НДФЛ с аванса" value={dec(m.advance_ndfl)} />
+                    <Row label="= Аванс на руки" value={dec(m.advance_net)} strong />
+                    <div className="mt-2 border-t border-line pt-2">
+                      <Row label="Расчёт (гросс)" value={dec(m.settlement_gross)} />
+                      <Row label="− НДФЛ с расчёта" value={dec(m.settlement_ndfl)} />
+                      <Row label="= Расчёт на руки" value={dec(m.settlement_net)} strong />
+                    </div>
+                  </>
+                )}
+                <div className={hasAdvance ? 'mt-2 border-t border-line pt-2' : ''}>
+                  <Row label="Страховые взносы (с ФОТ)" hint={msp ? 'льгота МСП' : 'единый тариф'} value={dec(m.vznosy)} />
+                  <Row label="Взносы на травматизм" hint="0,2%" value={dec(m.travmatizm)} />
+                  <Row label="Стоимость для работодателя" value={dec(m.gross.plus(m.vznosy).plus(m.travmatizm))} strong />
                 </div>
               </div>
+            )}
+          </Card>
+
+          {/* История по месяцам */}
+          <Card title="Зарплата по месяцам">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="py-2 pr-3 font-medium">Месяц</th>
+                    <th className="py-2 pr-3 text-right font-medium">Дней</th>
+                    <th className="py-2 pr-3 text-right font-medium">Начислено</th>
+                    <th className="py-2 pr-3 text-right font-medium">Удержано</th>
+                    <th className="py-2 pr-3 text-right font-medium">Выдано</th>
+                    <th className="py-2 text-right font-medium">Аванс</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {r.months.map((mm, i) => (
+                    <tr
+                      key={i}
+                      onClick={() => setSelMonth(i)}
+                      className={`cursor-pointer border-b border-line/60 transition-colors hover:bg-slate-50 ${
+                        i === selMonth ? 'bg-brand-50' : ''
+                      }`}
+                    >
+                      <td className="py-2 pr-3 text-ink">
+                        {MONTH_NAMES[i]} {year}
+                      </td>
+                      <td className="tnum py-2 pr-3 text-right text-muted">
+                        {worked[i]}/{norm(i)}
+                      </td>
+                      <td className="tnum py-2 pr-3 text-right text-ink">{dec(mm.gross)}</td>
+                      <td className="tnum py-2 pr-3 text-right text-muted">{dec(mm.ndfl)}</td>
+                      <td className="tnum py-2 pr-3 text-right font-medium text-ink">{dec(mm.net)}</td>
+                      <td className="tnum py-2 text-right text-muted">
+                        {hasAdvance ? dec(mm.advance_net) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-line font-medium text-ink">
+                    <td className="py-2 pr-3 text-right text-muted" colSpan={2}>
+                      За год
+                    </td>
+                    <td className="tnum py-2 pr-3 text-right">{dec(r.gross_year)}</td>
+                    <td className="tnum py-2 pr-3 text-right text-muted">{dec(r.ndfl_year)}</td>
+                    <td className="tnum py-2 pr-3 text-right">{dec(r.net_year)}</td>
+                    <td className="py-2"></td>
+                  </tr>
+                </tfoot>
+              </table>
             </div>
           </Card>
 
-          {hasAdvance && (
-            <Card title={`Аванс и расчёт (аванс ${advancePercent}%)`}>
-              <Row label="Аванс (гросс)" value={dec(m.advance_gross)} />
-              <Row label="− НДФЛ с аванса" value={dec(m.advance_ndfl)} />
-              <Row label="= Аванс на руки" value={dec(m.advance_net)} strong />
-              <div className="mt-3 border-t border-line pt-2">
-                <Row label="Расчёт (гросс)" value={dec(m.settlement_gross)} />
-                <Row label="− НДФЛ с расчёта" value={dec(m.settlement_ndfl)} />
-                <Row label="= Расчёт на руки" value={dec(m.settlement_net)} strong />
-              </div>
-              <div className="mt-3 border-t border-line pt-2">
-                <Row label="Итого НДФЛ за месяц" hint="аванс + расчёт" value={dec(m.ndfl)} strong />
-              </div>
-            </Card>
-          )}
-
-          <Card title="Как посчитано (в месяц)">
-            <Row label="Оклад (гросс)" value={dec(m.gross)} />
-            <Row label="− НДФЛ" hint="13% (прогрессия нарастающим за год)" value={dec(m.ndfl)} />
-            <Row label="= На руки" value={dec(m.net)} strong />
-            <div className="mt-3 border-t border-line pt-2">
-              <Row label="Страховые взносы (с ФОТ)" hint={msp ? 'льгота МСП' : 'единый тариф'} value={dec(m.vznosy)} />
-              <Row label="Взносы на травматизм" hint="0,2%" value={dec(m.travmatizm)} />
-              <Row label="Стоимость для работодателя" value={dec(m.gross.plus(m.vznosy).plus(m.travmatizm))} strong />
-            </div>
-          </Card>
-
-          <Card title="За год (при том же окладе)">
-            <Row label="Доход (гросс)" value={dec(r.gross_year)} />
+          <Card title="Взносы и стоимость за год">
+            <Row label="Доход (гросс) за год" value={dec(r.gross_year)} />
             <Row label="НДФЛ за год" value={dec(r.ndfl_year)} />
-            <Row label="На руки за год" value={dec(r.net_year)} />
             <Row label="Взносы за год" value={dec(r.vznosy_year.plus(r.travmatizm_year))} />
             <Row label="Стоимость для работодателя за год" value={dec(r.employer_cost_year)} strong />
           </Card>
-          <Note>НДФЛ считается нарастающим итогом; при годовом доходе свыше 2,4 млн ₽ ставка растёт (15% и выше).</Note>
+          <Note>
+            НДФЛ считается нарастающим итогом; при годовом доходе свыше 2,4 млн ₽ ставка растёт (15% и
+            выше). «Отработано» по каждому месяцу сохраняется в карточке сотрудника.
+          </Note>
         </div>
       )}
     </div>

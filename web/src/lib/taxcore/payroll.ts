@@ -241,6 +241,12 @@ export interface CalcSalaryOptions {
   advancePercent?: DecimalLike;
   /** День выплаты аванса (только для отображения/уведомлений) */
   advanceDay?: number;
+  /**
+   * Доля отработанного времени по месяцам (0..1): отработано рабочих дней / норма рабочих дней
+   * месяца. Длина — до `months`; отсутствующий/undefined элемент = 1 (полный месяц).
+   * Оклад месяца = оклад × доля (НДФЛ остаётся нарастающим итогом).
+   */
+  monthFactors?: Array<number | null | undefined>;
 }
 
 /**
@@ -262,10 +268,19 @@ export function calcSalary(
   } = opts;
 
   const p = getPayroll(year);
-  const gross = toDecimal(monthlyGross);
-  if (gross.lt(0)) {
+  const baseGross = toDecimal(monthlyGross);
+  if (baseGross.lt(0)) {
     throw new Error('Оклад не может быть отрицательным');
   }
+  const monthFactors = opts.monthFactors;
+  const factorAt = (mIndex0: number): Decimal => {
+    const f = monthFactors ? monthFactors[mIndex0] : undefined;
+    if (f === undefined || f === null) return new Decimal('1');
+    let d = toDecimal(f);
+    if (d.lt(0)) d = new Decimal('0');
+    if (d.gt(1)) d = new Decimal('1');
+    return d;
+  };
   let advanceShare = opts.advancePercent !== undefined ? toDecimal(opts.advancePercent) : new Decimal('0');
   if (advanceShare.lt(0)) advanceShare = new Decimal('0');
   if (advanceShare.gt(1)) advanceShare = new Decimal('1');
@@ -286,6 +301,7 @@ export function calcSalary(
   }
 
   for (let m = 1; m <= months; m++) {
+    const gross = money(baseGross.times(factorAt(m - 1)));
     cumIncome = cumIncome.plus(gross);
 
     // Вычет применяется, пока доход нарастающим итогом не превысил предел.
@@ -370,7 +386,7 @@ export function calcSalary(
 
   return {
     year,
-    monthly_gross: money(gross),
+    monthly_gross: money(baseGross),
     msp,
     months: rows,
     gross_year: grossYear,

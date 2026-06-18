@@ -48,6 +48,8 @@ export interface Employee {
   advancePercent?: number
   /** Заработок по годам ПО МЕСЯЦАМ (12 значений янв..дек) — для баз отпускных/больничных */
   earningsByYear?: Record<number, number[]>
+  /** Отработано рабочих дней по месяцам (12 значений янв..дек) на год; пусто = полный месяц */
+  workedDaysByYear?: Record<number, number[]>
   /** Отпуска сотрудника (период + вид) */
   vacations?: VacationEvent[]
   /** Больничные сотрудника (периоды) */

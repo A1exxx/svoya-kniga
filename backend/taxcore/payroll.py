@@ -220,14 +220,30 @@ def calc_salary(
     travmatizm_rate=None,
     months: int = 12,
     advance_percent=Decimal("0"),
+    month_factors=None,
 ) -> SalaryResult:
     """Расчёт зарплаты сотрудника: НДФЛ (прогрессия + детские вычеты, нарастающим итогом),
     страховые взносы (с льготой МСП) и стоимость для работодателя — проекция на `months`
-    при равном окладе. advance_percent (доля 0..1) — разбивка на аванс/расчёт."""
+    при равном окладе. advance_percent (доля 0..1) — разбивка на аванс/расчёт.
+    month_factors — список долей отработанного времени по месяцам (0..1), отсутствующий
+    элемент = 1 (полный месяц); оклад месяца = оклад × доля (НДФЛ остаётся нарастающим итогом)."""
     p = get_payroll(year)
-    gross = to_decimal(monthly_gross)
-    if gross < 0:
+    base_gross = to_decimal(monthly_gross)
+    if base_gross < 0:
         raise ValueError("Оклад не может быть отрицательным")
+
+    def factor_at(i0: int) -> Decimal:
+        if month_factors is None or i0 >= len(month_factors):
+            return Decimal("1")
+        f = month_factors[i0]
+        if f is None:
+            return Decimal("1")
+        d = to_decimal(f)
+        if d < 0:
+            d = Decimal("0")
+        if d > 1:
+            d = Decimal("1")
+        return d
     advance_share = to_decimal(advance_percent)
     if advance_share < 0:
         advance_share = Decimal("0")
@@ -248,6 +264,7 @@ def calc_salary(
 
     for m in range(1, months + 1):
         cum_ndfl_before = cum_ndfl
+        gross = money(base_gross * factor_at(m - 1))
         cum_income += gross
         # Вычет применяется, пока доход нарастающим итогом не превысил предел.
         ded_applied = ded_month if cum_income <= p.deduction_income_limit else Decimal("0")
@@ -327,7 +344,7 @@ def calc_salary(
 
     return SalaryResult(
         year=year,
-        monthly_gross=money(gross),
+        monthly_gross=money(base_gross),
         msp=msp,
         months=rows,
         gross_year=gross_year,
