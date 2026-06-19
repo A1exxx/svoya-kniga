@@ -214,6 +214,7 @@ export function Requisites() {
             {text('okpo', 'ОКПО', '12345678')}
             {text('taxOfficeCode', 'Код налоговой (ИФНС)', '7707', 'код вашей инспекции — в формах ФНС')}
             {text('phone', 'Телефон', '+7 999 123-45-67')}
+            {text('email', 'Эл. почта', 'mail@example.ru', 'печатается в шапке счёта')}
             <div className="sm:col-span-2">{text('address', 'Адрес', 'г. Москва, ...')}</div>
           </div>
         </Card>

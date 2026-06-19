@@ -16,6 +16,7 @@ function org(p: Partial<Org>): Org {
     okpo: '',
     taxOfficeCode: '',
     phone: '',
+    email: '',
     espOwner: '',
     espValidTo: '',
     ausn: false,

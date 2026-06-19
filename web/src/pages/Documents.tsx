@@ -462,9 +462,10 @@ export function Documents() {
                 <div className="mb-2 text-sm font-medium text-ink">Позиции</div>
                 <div className="space-y-2">
                   {selected.items.map((it, i) => (
-                    <div key={it.id} className="grid grid-cols-[1fr_56px_90px_32px] gap-1.5 sm:grid-cols-[1fr_70px_110px_36px] sm:gap-2">
+                    <div key={it.id} className="grid grid-cols-[1fr_52px_46px_84px_32px] gap-1.5 sm:grid-cols-[1fr_64px_56px_104px_36px] sm:gap-2">
                       <input className={inputClass} placeholder="Наименование" value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.qty} onChange={(e) => setItem(i, { qty: Math.max(0, Number(e.target.value) || 0) })} />
+                      <input className={`${inputClass} text-center`} placeholder="ед." title="Единица измерения" value={it.unit ?? 'шт'} onChange={(e) => setItem(i, { unit: e.target.value })} />
                       <input type="number" min={0} className={`${inputClass} text-right`} value={it.price} onChange={(e) => setItem(i, { price: Math.max(0, Number(e.target.value) || 0) })} />
                       <button type="button" aria-label="Удалить строку" title="Удалить строку" onClick={() => removeItem(i)} className="cursor-pointer rounded-lg border border-line text-slate-400 transition-colors hover:text-danger">✕</button>
                     </div>

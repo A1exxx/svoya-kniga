@@ -31,6 +31,7 @@ export interface Org {
   okpo: string // код ОКПО
   taxOfficeCode: string // код налоговой инспекции (КодНО в XML-формах ФНС)
   phone: string // контактный телефон
+  email: string // контактный e-mail (печатается в шапке счёта)
   // Банк
   bankAccount: string
   bik: string
@@ -80,6 +81,7 @@ function demoOrg(): Org {
     okpo: '',
     taxOfficeCode: '',
     phone: '',
+    email: '',
     bankAccount: '',
     bik: '',
     bankName: '',

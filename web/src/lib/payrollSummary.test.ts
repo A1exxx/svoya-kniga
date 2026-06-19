@@ -7,7 +7,7 @@ import type { Employee } from '../state/employeesStore'
 function org(p: Partial<Org> = {}): Org {
   return {
     id: 'o', name: 'ИП Тест', inn: '', ogrnip: '', fio: '', regDate: '', address: '', okved: '',
-    oktmo: '', okpo: '', taxOfficeCode: '', phone: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false,
+    oktmo: '', okpo: '', taxOfficeCode: '', phone: '', email: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false,
     bankAccount: '', bik: '', bankName: '', corrAccount: '', taxSystem: 'usn', usnObject: 'income', regionalRate: null,
     hasEmployees: true, vat: false, vatMode: 'auto', year: 2026, income: 0, expenses: 0, ...p,
   }

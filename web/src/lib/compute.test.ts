@@ -21,7 +21,7 @@ function makeOrg(patch: Partial<Org> = {}): Org {
     corrAccount: '',
     taxSystem: 'usn',
     usnObject: 'income',
-    okpo: '', taxOfficeCode: '', phone: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false, regionalRate: null,
+    okpo: '', taxOfficeCode: '', phone: '', email: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false, regionalRate: null,
     hasEmployees: false,
     vat: false,
     vatMode: 'auto',

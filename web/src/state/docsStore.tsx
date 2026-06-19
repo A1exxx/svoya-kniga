@@ -10,6 +10,7 @@ export interface DocItem {
   name: string
   qty: number
   price: number
+  unit?: string // единица измерения (шт, услуга, кг…) — колонка «Ед.» в счёте
 }
 
 export type DocType = 'invoice' | 'act' | 'waybill' | 'upd' | 'contract'
@@ -104,8 +105,8 @@ export function makeItemId(): string {
 }
 
 /** Новая строка документа со стабильным id. */
-export function newDocItem(name = '', qty = 1, price = 0): DocItem {
-  return { id: makeItemId(), name, qty, price }
+export function newDocItem(name = '', qty = 1, price = 0, unit = 'шт'): DocItem {
+  return { id: makeItemId(), name, qty, price, unit }
 }
 
 function load(): Store {
