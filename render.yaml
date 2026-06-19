@@ -1,0 +1,24 @@
+# Render Blueprint — бесплатный деплой бэкенда «СвояКнига» из этого репозитория.
+# Render → New → Blueprint → подключить репозиторий A1exxx/svoyakniga.
+# База — бесплатный Neon Postgres (DATABASE_URL вставляется вручную, см. docs/DEPLOY-FREE-TEST.md).
+#
+# ⚠️ ТОЛЬКО для теста на ВЫДУМАННЫХ данных. Реальные ПДн граждан РФ — только РФ-хостинг (152-ФЗ).
+services:
+  - type: web
+    name: svoyakniga-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL          # из Neon, в форме postgresql+psycopg://...
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE       # фронт (github.io) и API (onrender.com) — разные домены
+        value: "none"
+      - key: SESSION_TTL_DAYS
+        value: "14"
+      - key: CORS_ORIGINS
+        value: "https://a1exxx.github.io"
