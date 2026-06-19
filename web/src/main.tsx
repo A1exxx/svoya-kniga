@@ -17,11 +17,13 @@ import { recoverFromIdb } from './lib/storage/idb'
 import { applyTheme } from './lib/theme'
 import { installGlobalErrorHandlers, logError } from './lib/errorLog'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { CloudProvider } from './state/authStore'
 
 function render() {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>
       <ErrorBoundary>
+        <CloudProvider>
         <OrgProvider>
           <OpsProvider>
             <ContractorsProvider>
@@ -41,6 +43,7 @@ function render() {
             </ContractorsProvider>
           </OpsProvider>
         </OrgProvider>
+        </CloudProvider>
       </ErrorBoundary>
     </StrictMode>,
   )

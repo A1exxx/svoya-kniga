@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useOrg } from '../state/orgStore'
 import { orgDisplayName, requisitesComplete } from '../lib/orgDisplay'
 import { getTheme, setTheme, type Theme } from '../lib/theme'
+import { CloudStatus } from './CloudStatus'
 import {
   IconBuilding,
   IconAlert,
@@ -157,6 +158,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           <IconPlus size={14} />
           Добавить ИП
         </button>
+        <CloudStatus />
         <ThemeToggle />
       </div>
     </aside>
