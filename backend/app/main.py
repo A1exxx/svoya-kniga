@@ -10,6 +10,8 @@ from dataclasses import asdict
 from decimal import Decimal
 from typing import List, Optional
 
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -25,14 +27,34 @@ from taxcore import (
     usn_quick,
 )
 
-app = FastAPI(title="СвояКнига API", version="0.1.0")
+from .auth import router as auth_router
+from .db import init_db
+from .sync import router as sync_router
+
+app = FastAPI(title="СвояКнига API", version="0.2.0")
+
+# Источники для CORS. С куками нельзя "*" — перечисляем явные origin
+# (локалка + адрес фронтенда). Задаётся через CORS_ORIGINS (через запятую).
+_default_origins = "http://localhost:3000,http://127.0.0.1:3000,http://localhost:5180,https://a1exxx.github.io"
+_origins = [o.strip() for o in os.environ.get("CORS_ORIGINS", _default_origins).split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=_origins,
+    allow_credentials=True,  # cookie-сессии
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+app.include_router(sync_router)
+
+
+@app.on_event("startup")
+def _startup() -> None:
+    # Создать таблицы при первом запуске (SQLite/локально). В проде схему
+    # накатывает Alembic; create_all idempotent и не мешает.
+    init_db()
 
 
 def _obj(value: str) -> UsnObject:

@@ -1,0 +1,37 @@
+# Локальный «боевой» прогон: API + PostgreSQL.
+# Запуск:  docker compose up --build
+# API:     http://localhost:8000/docs
+# Это та же связка, что разворачивается у РФ-провайдера (managed Postgres + контейнер).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: svoyakniga
+      POSTGRES_PASSWORD: change-me-strong
+      POSTGRES_DB: svoyakniga
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U svoyakniga"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  web:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://svoyakniga:change-me-strong@db:5432/svoyakniga
+      SESSION_TTL_DAYS: "14"
+      COOKIE_SECURE: "false"      # за HTTPS-прокси в проде → true
+      COOKIE_SAMESITE: "lax"
+      CORS_ORIGINS: "http://localhost:5180,https://a1exxx.github.io"
+    ports:
+      - "8000:8000"
+
+volumes:
+  pgdata:
