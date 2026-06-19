@@ -20,6 +20,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -69,6 +70,9 @@ class WorkspaceVersion(Base):
     История = многослойная защита от потери (откат к любой точке)."""
 
     __tablename__ = "workspace_versions"
+    # Номер версии уникален в пределах рабочего стола — БД не даст создать дубль
+    # при конкурентном сохранении (две вкладки/устройства). См. _store_version (retry).
+    __table_args__ = (UniqueConstraint("workspace_id", "version", name="uq_ws_version"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)

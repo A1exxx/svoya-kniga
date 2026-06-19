@@ -374,8 +374,11 @@ class VacationResult:
     notes: list[str] = field(default_factory=list)
 
 
-def calc_vacation(year: int, base_12m, vacation_days: int) -> VacationResult:
-    """Отпускные: СДЗ = база за 12 мес ÷ 12 ÷ 29,3 (ст. 139 ТК РФ). НДФЛ упрощённо 13%."""
+def calc_vacation(year: int, base_12m, vacation_days: int, cumulative_base_ytd=0) -> VacationResult:
+    """Отпускные: СДЗ = база за 12 мес ÷ 12 ÷ 29,3 (ст. 139 ТК РФ).
+
+    cumulative_base_ytd — доход нарастающим итогом до этой выплаты (для маржинальной
+    ставки НДФЛ за порогом 2,4 млн); 0 (по умолчанию) → НДФЛ с нуля, как раньше."""
     if vacation_days < 0:
         raise ValueError("Число дней отпуска не может быть отрицательным")
     p = get_payroll(year)
@@ -385,8 +388,10 @@ def calc_vacation(year: int, base_12m, vacation_days: int) -> VacationResult:
     # Округляем среднедневной до копеек один раз, чтобы сумма = СДЗ × дни сходилась вручную.
     avg_daily = money(max(avg_daily_raw, min_daily))
     gross = money(avg_daily * vacation_days)
-    ndfl = ndfl_progressive(gross)
-    notes = ["НДФЛ с отпускных по прогрессивной шкале от суммы выплаты (без годовых вычетов) — сверить с бухгалтером."]
+    # НДФЛ нарастающим итогом: маржинальный налог = налог(база+отпускные) − налог(база).
+    cum = to_decimal(cumulative_base_ytd)
+    ndfl = ndfl_progressive(cum + gross) - ndfl_progressive(cum)
+    notes = ["НДФЛ с отпускных по прогрессивной шкале; при доходе свыше 2,4 млн ₽ передайте накопленный доход — сверить с бухгалтером."]
     return VacationResult(
         year=year,
         avg_daily=money(avg_daily),
@@ -427,6 +432,7 @@ def calc_sick_leave(
     employer_days: int = 3,
     days_in_month: int = 31,
     day_floors=None,
+    under6m_stazh: bool = False,
 ) -> SickLeaveResult:
     """Больничный: СДЗ = (заработок за 2 пред. года, каждый ≤ предельной базы) ÷ 730,
     с учётом стажа и ограничений мин/макс. Первые `employer_days` дней — за счёт работодателя."""
@@ -473,11 +479,18 @@ def calc_sick_leave(
         d = day_floors[i] if (day_floors and i < len(day_floors) and day_floors[i]) else days_in_month
         return p.mrot / Decimal(d)
 
+    if under6m_stazh:
+        notes.append("Стаж менее 6 месяцев: пособие ограничено МРОТ за календарный месяц (ст. 7 ч. 6 ФЗ № 255-ФЗ).")
+
+    # Стаж <6 мес — ПОТОЛОК МРОТ/день (не выше); иначе МРОТ — это ПОЛ (не ниже).
+    def day_amount(i: int) -> Decimal:
+        return min(benefit_daily, floor_for(i)) if under6m_stazh else max(benefit_daily, floor_for(i))
+
     emp_days = min(employer_days, sick_days)
     total_raw = Decimal("0")
     employer_raw = Decimal("0")
     for i in range(sick_days):
-        d = money(max(benefit_daily, floor_for(i)))
+        d = money(day_amount(i))
         total_raw += d
         if i < emp_days:
             employer_raw += d
@@ -485,7 +498,8 @@ def calc_sick_leave(
     employer_part = money(employer_raw)
     sfr_part = money(total - employer_part)
     # Представительное дневное пособие (по основному месяцу) — для отображения.
-    daily_benefit = money(max(benefit_daily, p.mrot / Decimal(days_in_month)))
+    mrot_day = p.mrot / Decimal(days_in_month)
+    daily_benefit = money(min(benefit_daily, mrot_day) if under6m_stazh else max(benefit_daily, mrot_day))
     ndfl = ndfl_progressive(total)
 
     return SickLeaveResult(

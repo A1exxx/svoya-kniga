@@ -62,7 +62,7 @@ export function Documents() {
   const { docs, addDoc, updateDoc, removeDoc } = useDocs()
   const { contractors } = useContractors()
   const { goods } = useGoods()
-  const { addOp, removeOp, ops } = useOps()
+  const { addOp, removeOp, updateOp, ops } = useOps()
   const [selectedId, setSelectedId] = useState<string | null>(docs[0]?.id ?? null)
   const [printId, setPrintId] = useState<string | null>(null)
 
@@ -110,14 +110,22 @@ export function Documents() {
     setSelectedId(docs.find((x) => x.direction === d)?.id ?? null)
   }
 
+  // Правка позиций документа. Если документ уже «Оплачен» и связан с проводкой в
+  // «Деньгах» — пересчитываем сумму проводки (иначе база УСН/КУДиР останется по старой сумме).
+  const commitItems = (items: DocItem[]) => {
+    if (!selected) return
+    updateDoc(selected.id, { items })
+    if (selected.linkedOpId && selected.paymentStatus === 'paid') {
+      updateOp(selected.linkedOpId, { amount: docTotals({ ...selected, items }).subtotal })
+    }
+  }
   const setItem = (idx: number, patch: Partial<DocItem>) => {
     if (!selected) return
-    const items = selected.items.map((it, i) => (i === idx ? { ...it, ...patch } : it))
-    updateDoc(selected.id, { items })
+    commitItems(selected.items.map((it, i) => (i === idx ? { ...it, ...patch } : it)))
   }
-  const addItem = () => selected && updateDoc(selected.id, { items: [...selected.items, newDocItem()] })
+  const addItem = () => selected && commitItems([...selected.items, newDocItem()])
   const removeItem = (idx: number) =>
-    selected && updateDoc(selected.id, { items: selected.items.filter((_, i) => i !== idx) })
+    selected && commitItems(selected.items.filter((_, i) => i !== idx))
 
   const pickContractor = (id: string) => {
     const c = contractors.find((x) => x.id === id)
@@ -127,7 +135,7 @@ export function Documents() {
   const addFromGood = (id: string) => {
     const g = goods.find((x) => x.id === id)
     if (!selected || !g) return
-    updateDoc(selected.id, { items: [...selected.items, newDocItem(g.name, 1, g.price)] })
+    commitItems([...selected.items, newDocItem(g.name, 1, g.price)])
   }
 
   // Смена статуса оплаты: «Оплачен» → создаёт поступление в «Деньгах»; снятие — удаляет его.

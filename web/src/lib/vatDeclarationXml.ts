@@ -59,9 +59,10 @@ export function vatDeclarationXml(
   const inn = org.inn || ''
   const oktmo = org.oktmo || '00000000'
   const toPay = rub(vat.vat)
-  // Раздел 3 «СумНал» — ИСЧИСЛЕННЫЙ налог (до вычета): output = к уплате + входящий вычет.
-  // Тогда инвариант формы: СумНал − ВычетВходящий == Раздел1/НалПУ (без двойного вычета).
-  const assessed = rub(vat.vat.plus(vat.input_vat_deducted))
+  // Раздел 3 «СумНал» — ИСЧИСЛЕННЫЙ налог с реализации (до вычета) = output_vat из taxcore.
+  // Раньше считали как vat+вычет: при входящем НДС больше исходящего это давало сумму
+  // ВЫЧЕТА вместо налога с реализации (форма становилась внутренне противоречивой).
+  const assessed = rub(vat.output_vat)
   const base = rub(vat.base)
   const rate = vat.rate.toNumber()
   const special = vat.mode === 'rate5' || vat.mode === 'rate7'

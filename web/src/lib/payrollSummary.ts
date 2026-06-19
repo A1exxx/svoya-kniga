@@ -3,8 +3,35 @@
  * расчётно-платёжной ведомости и отчётов за сотрудников (6-НДФЛ/РСВ/ЕФС-1/перс.сведения).
  */
 import { calcSalary, workdaysInMonth, type CalcSalaryOptions } from './taxcore'
+import { unionWorkdaysInMonth, workdaysInMonthByWeekday } from './vacation'
 import type { Org } from '../state/orgStore'
 import type { Employee } from '../state/employeesStore'
+
+/**
+ * Факторы месяца (доля отработанного 0..1) ЕДИНЫМ способом для всех экранов.
+ * Авто-учёт больничных/отпусков без оплаты (autoSickVacation): отсутствие и норма
+ * месяца считаются в ОДНОЙ системе (будни минус праздники), пересечения дедуплицируются.
+ * Иначе — из введённых вручную отработанных дней (workedDaysByYear).
+ */
+export function monthFactorsFor(e: Employee, year: number): number[] {
+  if (e.autoSickVacation) {
+    const sick = e.sickLeaves ?? []
+    const unpaid = (e.vacations ?? []).filter((v) => v.type === 'unpaid')
+    return Array.from({ length: 12 }, (_, m) => {
+      const dm = workdaysInMonthByWeekday(year, m)
+      if (dm <= 0) return 1
+      const absent = unionWorkdaysInMonth([sick, unpaid], year, m)
+      return Math.max(0, (dm - absent) / dm)
+    })
+  }
+  const wd = e.workedDaysByYear?.[year]
+  if (!wd) return Array.from({ length: 12 }, () => 1)
+  return Array.from({ length: 12 }, (_, m) => {
+    const n = workdaysInMonth(year, m + 1)
+    const d = wd[m]
+    return d == null || !n ? 1 : Math.min(Math.max(d, 0), n) / n
+  })
+}
 
 export interface EmployeeAgg {
   e: Employee
@@ -38,14 +65,9 @@ export interface PayrollSummary {
  * рабочим дням), а не полную проекцию 12×оклад.
  */
 export function employeeSalaryOptions(e: Employee, year?: number): CalcSalaryOptions {
-  const wd = year != null ? e.workedDaysByYear?.[year] : undefined
-  const monthFactors = wd
-    ? Array.from({ length: 12 }, (_, i) => {
-        const n = workdaysInMonth(year as number, i + 1)
-        const d = wd[i]
-        return d == null || !n ? 1 : Math.min(Math.max(d, 0), n) / n
-      })
-    : undefined
+  // monthFactorsFor учитывает И ручные отработанные дни, И авто-больничные/отпуска —
+  // одинаково на всех экранах (вкладка «Зарплата», Сводка, отчёты, ведомость).
+  const monthFactors = year != null ? monthFactorsFor(e, year) : undefined
   return {
     children: e.children,
     msp: e.msp,

@@ -113,12 +113,13 @@ export function Money() {
   // Оценка НДС и УСН по месяцам — то, что просила бухгалтер: «загрузили выписку, сразу видно
   // сколько НДС выделено и сколько УСН за месяц/квартал». Это ОЦЕНКА из операций (не официальный
   // аванс — он на «Налогах», с учётом взносов и поквартальной логики).
+  // Базовая ставка по объекту; региональную применяем ТОЛЬКО если она в допустимом
+  // диапазоне для текущего объекта (иначе это «залипшая» ставка от другого объекта).
+  const usnBase = activeOrg.usnObject === 'income_minus' ? 15 : 6
   const usnRate =
-    activeOrg.regionalRate != null
+    activeOrg.regionalRate != null && activeOrg.regionalRate <= usnBase
       ? activeOrg.regionalRate
-      : activeOrg.usnObject === 'income_minus'
-        ? 15
-        : 6
+      : usnBase
   const taxRows = Array.from({ length: 12 }, () => ({ inc: 0, exp: 0, vatOut: 0, vatIn: 0 }))
   for (const o of yearOps) {
     const m = Number(o.date.slice(5, 7)) - 1
@@ -149,7 +150,10 @@ export function Money() {
   // Создать счёт/платёжку из текущей операции и перейти в соответствующий раздел.
   const createDocFromDraft = (what: 'invoice' | 'payment') => {
     if (what === 'invoice') {
-      const id = addDoc('invoice', 'outgoing')
+      // Из расхода — ВХОДЯЩИЙ счёт (мы покупатель), иначе исходящий ошибочно попадёт
+      // в книгу продаж/дебиторку как наша выручка.
+      const direction = draft.kind === 'expense' ? 'incoming' : 'outgoing'
+      const id = addDoc('invoice', direction)
       updateDoc(id, {
         buyer: draft.counterparty,
         items: [newDocItem(draft.note || 'Товар / услуга', 1, draft.amount || 0)],

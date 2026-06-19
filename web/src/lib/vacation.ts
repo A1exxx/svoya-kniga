@@ -35,6 +35,39 @@ export function workdaysOfPeriodsInMonth(
   return count
 }
 
+/** Рабочих дней в ПОЛНОМ месяце (будни минус праздники) — та же база, что и
+ *  workdaysOfPeriodsInMonth, чтобы отсутствие и норма считались в одной системе. */
+export function workdaysInMonthByWeekday(year: number, month0: number): number {
+  const last = new Date(year, month0 + 1, 0).getDate()
+  const iso = (d: number) =>
+    `${year}-${String(month0 + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  return workdaysOfPeriodsInMonth([{ from: iso(1), to: iso(last) }], year, month0)
+}
+
+/** Уникальных рабочих дней нескольких наборов периодов в месяце — с ДЕДУПЛИКАЦИЕЙ
+ *  пересечений (один день в больничном И отпуске без оплаты не вычитается дважды). */
+export function unionWorkdaysInMonth(
+  periodSets: { from: string; to: string }[][],
+  year: number,
+  month0: number
+): number {
+  const holidays = new Set(HOLIDAYS_BY_YEAR[year] ?? [])
+  const days = new Set<string>()
+  for (const periods of periodSets) {
+    for (const p of periods) {
+      const a = new Date(p.from + 'T00:00:00')
+      const b = new Date(p.to + 'T00:00:00')
+      if (isNaN(a.getTime()) || isNaN(b.getTime()) || b < a) continue
+      for (const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+        if (d.getFullYear() === year && d.getMonth() === month0 && isWorkdayLocal(d, holidays)) {
+          days.add(`${d.getMonth()}-${d.getDate()}`)
+        }
+      }
+    }
+  }
+  return days.size
+}
+
 /** Календарных дней в периоде [from, to] включительно (0 при некорректном). */
 export function periodDays(from: string, to: string): number {
   const a = Date.parse(from)

@@ -426,7 +426,10 @@ export interface VacationResult {
 export function calcVacation(
   year: number,
   base12m: DecimalLike,
-  vacationDays: number
+  vacationDays: number,
+  /** Доход нарастающим итогом до этой выплаты (для маржинальной ставки НДФЛ за порогом 2,4 млн).
+   *  0 (по умолчанию) → НДФЛ от суммы отпускных с нуля (как раньше). */
+  cumulativeBaseYtd: DecimalLike = 0
 ): VacationResult {
   if (vacationDays < 0) {
     throw new Error('Число дней отпуска не может быть отрицательным');
@@ -438,9 +441,11 @@ export function calcVacation(
   // Округляем среднедневной до копеек один раз, чтобы сумма = СДЗ × дни сходилась вручную.
   const avgDaily = money(Decimal.max(avgDailyRaw, minDaily));
   const gross = money(avgDaily.times(vacationDays));
-  const ndfl = ndflProgressive(gross);
+  // НДФЛ нарастающим итогом: маржинальный налог с отпускных = налог(база+отпускные) − налог(база).
+  const cum = toDecimal(cumulativeBaseYtd);
+  const ndfl = ndflProgressive(cum.plus(gross)).minus(ndflProgressive(cum));
   const notes = [
-    'НДФЛ с отпускных по прогрессивной шкале от суммы выплаты (без годовых вычетов) — сверить с бухгалтером.',
+    'НДФЛ с отпускных по прогрессивной шкале; при доходе свыше 2,4 млн ₽ за год передайте накопленный доход — сверить с бухгалтером.',
   ];
   return {
     year,
@@ -488,7 +493,9 @@ export function calcSickLeave(
   sickDays: number,
   employerDays = 3,
   daysInMonth = 31,
-  dayFloors?: number[]
+  dayFloors?: number[],
+  /** Общий страховой стаж менее 6 месяцев — пособие НЕ выше МРОТ за месяц (ст. 7 ч. 6 ФЗ № 255-ФЗ). */
+  under6mStazh = false
 ): SickLeaveResult {
   if (sickDays < 0) {
     throw new Error('Число дней болезни не может быть отрицательным');
@@ -538,11 +545,17 @@ export function calcSickLeave(
   const benefitDaily = avg.times(coeff);
   const floorFor = (i: number) =>
     p.mrot.div(new Decimal(dayFloors && dayFloors[i] ? dayFloors[i] : daysInMonth));
+  if (under6mStazh) {
+    notes.push('Стаж менее 6 месяцев: пособие ограничено МРОТ за календарный месяц (ст. 7 ч. 6 ФЗ № 255-ФЗ).');
+  }
+  // Стаж <6 мес — ПОТОЛОК МРОТ/день (не выше); иначе МРОТ — это ПОЛ (не ниже).
+  const dayAmount = (i: number) =>
+    under6mStazh ? Decimal.min(benefitDaily, floorFor(i)) : Decimal.max(benefitDaily, floorFor(i));
   const empDays = Math.min(employerDays, sickDays);
   let totalRaw = new Decimal('0');
   let employerRaw = new Decimal('0');
   for (let i = 0; i < sickDays; i++) {
-    const d = money(Decimal.max(benefitDaily, floorFor(i)));
+    const d = money(dayAmount(i));
     totalRaw = totalRaw.plus(d);
     if (i < empDays) employerRaw = employerRaw.plus(d);
   }
@@ -550,7 +563,8 @@ export function calcSickLeave(
   const employerPart = money(employerRaw);
   const sfrPart = money(total.minus(employerPart));
   // Представительное дневное пособие (по основному месяцу) — для отображения.
-  const dailyBenefit = money(Decimal.max(benefitDaily, p.mrot.div(new Decimal(daysInMonth))));
+  const mrotDay = p.mrot.div(new Decimal(daysInMonth));
+  const dailyBenefit = money(under6mStazh ? Decimal.min(benefitDaily, mrotDay) : Decimal.max(benefitDaily, mrotDay));
   const ndfl = ndflProgressive(total);
 
   return {

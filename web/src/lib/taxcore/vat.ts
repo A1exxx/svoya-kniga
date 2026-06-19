@@ -35,7 +35,8 @@ export interface VatResult {
   exempt: boolean;
   rate: Decimal;
   base: Decimal;
-  vat: Decimal;
+  vat: Decimal; // НДС к уплате (исходящий − вычет, не ниже 0)
+  output_vat: Decimal; // исчисленный НДС с реализации (до вычета) — стр. 118 декларации
   input_vat_deducted: Decimal;
   mode: string;
   notes: string[];
@@ -84,6 +85,7 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
       rate: D0(),
       base: roundRub(inc),
       vat: D0(),
+      output_vat: D0(),
       input_vat_deducted: D0(),
       mode: 'none',
       notes,
@@ -103,6 +105,7 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
       rate: D0(),
       base: roundRub(inc),
       vat: D0(),
+      output_vat: D0(),
       input_vat_deducted: D0(),
       mode: 'usn_lost',
       notes,
@@ -135,6 +138,7 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
   let base: Decimal;
   let vat: Decimal;
   let deducted: Decimal;
+  let output: Decimal; // исчисленный НДС с реализации (до вычета) — стр. 118 декларации
 
   if (special) {
     // Спец-ставки: база = выручка без НДС, вычет входящего не применяется.
@@ -146,10 +150,10 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
       vat = inc.times(rate).div(100);
     }
     deducted = D0();
+    output = vat; // без вычета исчисленный = к уплате
     notes.push(`Специальная ставка ${rate}% — без вычета входящего НДС (ст. 170 НК РФ).`);
   } else {
     // Общая ставка (10/20/22): НДС = исходящий − входящий.
-    let output: Decimal;
     if (incomeIncludesVat) {
       base = inc.div(new Decimal('1').plus(rate.div(100)));
       output = inc.minus(base);
@@ -172,6 +176,7 @@ export function calcVatUsn(year: number, income: DecimalLike, opts: CalcVatOptio
     rate,
     base: roundRub(base),
     vat: roundRub(vat),
+    output_vat: roundRub(output),
     input_vat_deducted: roundRub(deducted),
     mode: appliedMode,
     notes,

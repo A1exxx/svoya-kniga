@@ -51,6 +51,7 @@ class VatResult:
     vat: Decimal             # НДС к уплате, руб.
     input_vat_deducted: Decimal  # принятый к вычету входящий НДС (только для 20%)
     mode: str                # 'none' | 'rate5' | 'rate7' | 'general20'
+    output_vat: Decimal = Decimal("0")  # исчисленный НДС с реализации (до вычета) — стр.118
     notes: list[str] = field(default_factory=list)
 
 
@@ -149,6 +150,7 @@ def calc_vat_usn(
             base = inc
             vat = inc * rate / Decimal("100")
         deducted = Decimal("0")
+        output = vat  # без вычета исчисленный = к уплате
         notes.append(
             f"Специальная ставка {rate}% — без вычета входящего НДС "
             "(входящий учитывается в стоимости, ст. 170 НК РФ)."
@@ -175,6 +177,7 @@ def calc_vat_usn(
         rate=rate,
         base=round_rub(base),
         vat=round_rub(vat),
+        output_vat=round_rub(output),
         input_vat_deducted=round_rub(deducted),
         mode=applied_mode,
         notes=notes,

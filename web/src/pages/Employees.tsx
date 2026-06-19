@@ -6,13 +6,13 @@ import {
   type VacationType,
   type VacationEvent,
 } from '../state/employeesStore'
-import { periodDays, accruedVacationDays, sickDayFloors, workdaysOfPeriodsInMonth } from '../lib/vacation'
+import { periodDays, accruedVacationDays, sickDayFloors, unionWorkdaysInMonth } from '../lib/vacation'
 import { VacationOrderDoc, VacationScheduleDoc } from '../components/employee/EmployeeDocs'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation, workdaysInMonth } from '../lib/taxcore'
 import { formatRub, formatDate } from '../lib/format'
 import { computeStazh, formatStazh, stazhYearsFromHire } from '../lib/stazh'
 import { sickBases, vacationBase12m } from '../lib/earnings'
-import { payrollSummary, employeeSalaryOptions } from '../lib/payrollSummary'
+import { payrollSummary, employeeSalaryOptions, monthFactorsFor } from '../lib/payrollSummary'
 import { validateSnils } from '../lib/validation'
 import { checkMspOkved } from '../lib/mspOkved'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
@@ -533,12 +533,13 @@ function SalaryCalc({ year }: { year: number }) {
   const autoSV = !!selEmpSV?.autoSickVacation
   const sickPeriods = selEmpSV?.sickLeaves ?? []
   const unpaidVacPeriods = (selEmpSV?.vacations ?? []).filter((v) => v.type === 'unpaid')
+  // Авто-факторы месяца — ЕДИНАЯ логика monthFactorsFor (отсутствие/норма в одной
+  // системе будни-минус-праздники, дедуп пересечений) — те же числа, что в отчётах/сводке.
+  const autoFactors = autoSV && selEmpSV ? monthFactorsFor(selEmpSV, year) : null
   const absenceWd = (mi: number) =>
-    autoSV
-      ? workdaysOfPeriodsInMonth(sickPeriods, year, mi) + workdaysOfPeriodsInMonth(unpaidVacPeriods, year, mi)
-      : 0
-  const effWorked = worked.map((w, i) => (autoSV ? Math.max(0, norm(i) - absenceWd(i)) : w))
-  const factors = effWorked.map((d, i) => (norm(i) ? d / norm(i) : 1))
+    autoSV ? unionWorkdaysInMonth([sickPeriods, unpaidVacPeriods], year, mi) : 0
+  const factors = autoFactors ?? worked.map((d, i) => (norm(i) ? d / norm(i) : 1))
+  const effWorked = worked.map((w, i) => (autoFactors ? Math.round(norm(i) * autoFactors[i]) : w))
   let r: ReturnType<typeof calcSalary> | null = null
   try {
     r = calcSalary(year, gross, { children, msp, advancePercent: advancePercent / 100, monthFactors: factors })
@@ -1055,6 +1056,7 @@ function SickCalc({ year }: { year: number }) {
   const [e1, setE1] = useState(800_000)
   const [e2, setE2] = useState(750_000)
   const [stazh, setStazh] = useState(7)
+  const [under6m, setUnder6m] = useState(false)
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
 
@@ -1074,7 +1076,7 @@ function SickCalc({ year }: { year: number }) {
 
   let r: ReturnType<typeof calcSickLeave> | null = null
   try {
-    r = days > 0 ? calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month), sickDayFloors(from, days)) : null
+    r = days > 0 ? calcSickLeave(year, e1, e2, stazh, days, 3, daysInMonth(year, month), sickDayFloors(from, days), under6m) : null
   } catch {
     r = null
   }
@@ -1098,6 +1100,17 @@ function SickCalc({ year }: { year: number }) {
             <Field label={`Заработок за ${year - 1} год`} hint={formatRub(e1)}>{numInput(e1, setE1)}</Field>
             <Field label={`Заработок за ${year - 2} год`} hint={formatRub(e2)}>{numInput(e2, setE2)}</Field>
             <Field label="Стаж, лет">{numInput(stazh, setStazh, { max: 60 })}</Field>
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-line text-brand-600"
+                checked={under6m}
+                onChange={(e) => setUnder6m(e.target.checked)}
+              />
+              <span className="text-sm text-ink">
+                Стаж менее 6 месяцев <span className="text-muted">(пособие не выше МРОТ/мес)</span>
+              </span>
+            </label>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Болел с"><input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
               <Field label="по"><input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} /></Field>
@@ -1196,7 +1209,9 @@ export function employeeAlimony(e: Employee, year: number): { alimony: number; l
   const gross = e.salary
   let ndfl = Math.round(gross * 0.13)
   try {
-    const r = calcSalary(year, gross, employeeSalaryOptions(e, year))
+    // НДФЛ для базы алиментов — от ПОЛНОГО оклада (без monthFactors): база = доход − НДФЛ
+    // с того же дохода (Пост. № 841), иначе при неполном январе НДФЛ занижался → база завышалась.
+    const r = calcSalary(year, gross, { children: e.children, msp: e.msp })
     ndfl = r.months[0]?.ndfl.toNumber() ?? ndfl
   } catch {
     /* fallback 13% */

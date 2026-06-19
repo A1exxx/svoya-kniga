@@ -124,6 +124,14 @@ def test_rate_limit_after_5_fails(client):
     assert blocked.status_code == 429
 
 
+def test_workspace_version_has_unique_constraint():
+    # Гарантия от дубля версий при конкурентном сохранении (P0-фикс).
+    from app.models import WorkspaceVersion
+
+    names = {c.name for c in WorkspaceVersion.__table__.constraints if c.name}
+    assert "uq_ws_version" in names
+
+
 def test_data_isolated_between_users(client):
     _register(client, email="a@example.com")
     client.put("/api/workspace", json={"data": {"secret": "A"}})

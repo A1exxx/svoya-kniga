@@ -13,7 +13,8 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from .auth import current_user
@@ -53,23 +54,42 @@ class SaveOut(BaseModel):
     saved_at: str
 
 
-def _store_version(db: DbSession, ws: Workspace, data: dict, note: str) -> WorkspaceVersion:
+def _persist_version(db: DbSession, ws: Workspace, data: dict, note: str) -> tuple[int, str]:
+    """Сохранить новую ревизию атомарно и устойчиво к гонке (две вкладки/устройства).
+
+    Номер версии берём из max(version) в БД (не из ws.current_version, который мог
+    устареть). UniqueConstraint(workspace_id, version) гарантирует отсутствие дублей:
+    при конкуренции одна вставка падает IntegrityError → откат и повтор с новым
+    номером. Так обе ревизии сохраняются (v6 и v7), ни одна не теряется."""
     payload = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
     size = len(payload.encode("utf-8"))
     if size > MAX_DOC_BYTES:
         raise HTTPException(status_code=413, detail="Слишком большой документ (>8 МБ)")
-    ver = WorkspaceVersion(
-        workspace_id=ws.id,
-        version=ws.current_version + 1,
-        data=payload,
-        size_bytes=size,
-        note=note[:255],
-        saved_at=utcnow(),
-    )
-    db.add(ver)
-    ws.current_version = ver.version
-    ws.updated_at = utcnow()
-    return ver
+    for _ in range(6):
+        nextv = (
+            db.scalar(
+                select(func.max(WorkspaceVersion.version)).where(
+                    WorkspaceVersion.workspace_id == ws.id
+                )
+            )
+            or 0
+        ) + 1
+        saved = utcnow()
+        db.add(
+            WorkspaceVersion(
+                workspace_id=ws.id, version=nextv, data=payload, size_bytes=size, note=note[:255], saved_at=saved
+            )
+        )
+        ws.current_version = nextv
+        ws.updated_at = saved
+        try:
+            db.commit()
+            return nextv, saved.isoformat()
+        except IntegrityError:
+            db.rollback()
+            db.refresh(ws)
+            continue
+    raise HTTPException(status_code=409, detail="Конфликт сохранения, повторите попытку")
 
 
 @router.get("")
@@ -85,9 +105,9 @@ def get_workspace(user: User = Depends(current_user), db: DbSession = Depends(ge
 @router.put("", response_model=SaveOut)
 def save_workspace(body: SaveIn, user: User = Depends(current_user), db: DbSession = Depends(get_db)):
     ws = _get_workspace(db, user)
-    ver = _store_version(db, ws, body.data, body.note)
-    db.commit()
-    return SaveOut(version=ver.version, saved_at=ver.saved_at.isoformat())
+    db.commit()  # зафиксировать возможный авто-создан ws перед расчётом версии
+    version, saved = _persist_version(db, ws, body.data, body.note)
+    return SaveOut(version=version, saved_at=saved)
 
 
 @router.get("/versions")
@@ -133,9 +153,9 @@ def restore_version(version: int, user: User = Depends(current_user), db: DbSess
     )
     if src is None:
         raise HTTPException(status_code=404, detail="Версия не найдена")
-    ver = _store_version(db, ws, json.loads(src.data), f"восстановление из версии {version}")
-    db.commit()
-    return SaveOut(version=ver.version, saved_at=ver.saved_at.isoformat())
+    data = json.loads(src.data)
+    new_v, saved = _persist_version(db, ws, data, f"восстановление из версии {version}")
+    return SaveOut(version=new_v, saved_at=saved)
 
 
 @router.get("/export")

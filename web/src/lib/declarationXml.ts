@@ -171,7 +171,7 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
     sumLines.push(line('110', rub(computed.usn.year_overpayment)))
 
   const sumSection = [
-    `      <СумУСН ${isIncome ? 'Раздел="1.1"' : 'Раздел="1.2"'} КБК="${kbk}" ОКТМО="00000000">`,
+    `      <СумУСН ${isIncome ? 'Раздел="1.1"' : 'Раздел="1.2"'} КБК="${kbk}" ОКТМО="${esc(org.oktmo || '00000000')}">`,
     ...sumLines,
     `      </СумУСН>`,
   ]
