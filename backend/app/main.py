@@ -162,3 +162,28 @@ def calc_periods(req: PeriodsRequest):
 
     cal = usn_calendar(req.year, usn=usn)
     return {"usn": asdict(usn), "calendar": [asdict(e) for e in cal]}
+
+
+# ---------- Отдача собранного фронтенда (локальный режим «всё в одном») ----------
+# Если рядом собран фронт (web/dist-local или web/dist), бэкенд отдаёт и приложение,
+# и API с ОДНОГО адреса — тогда вход/cookie работают без CORS. Монтируется ПОСЛЕ
+# всех /api-роутов, поэтому API имеет приоритет. HashRouter → нужен только index.html.
+from pathlib import Path  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+
+
+def _frontend_dir() -> "Path | None":
+    env = os.environ.get("FRONTEND_DIST")
+    if env and Path(env).is_dir():
+        return Path(env)
+    base = Path(__file__).resolve().parent.parent.parent / "web"
+    for name in ("dist-local", "dist"):
+        p = base / name
+        if (p / "index.html").is_file():
+            return p
+    return None
+
+
+_FRONTEND = _frontend_dir()
+if _FRONTEND is not None:
+    app.mount("/", StaticFiles(directory=str(_FRONTEND), html=True), name="frontend")

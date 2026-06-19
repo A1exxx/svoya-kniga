@@ -9,11 +9,16 @@ from __future__ import annotations
 
 import os
 
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-# DATABASE_URL: прод → Postgres; по умолчанию → локальный SQLite-файл.
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./svoyakniga.db")
+# DATABASE_URL: прод → Postgres; по умолчанию → локальный SQLite-файл рядом с
+# бэкендом (АБСОЛЮТНЫЙ путь — чтобы база всегда лежала в одном месте,
+# независимо от того, из какой папки запущено: backend/svoyakniga.db).
+_default_db = (Path(__file__).resolve().parent.parent / "svoyakniga.db").as_posix()
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_default_db}")
 
 # SQLite требует check_same_thread=False для работы с FastAPI (пул потоков).
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}

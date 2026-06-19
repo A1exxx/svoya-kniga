@@ -7,8 +7,12 @@
  */
 export const API_BASE: string = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || ''
 
-/** Включён ли серверный режим (задан адрес API). */
-export const serverMode = (): boolean => API_BASE.length > 0
+// VITE_SERVER_MODE=true — серверный режим при ОДНОМ адресе (бэкенд сам отдаёт
+// приложение): API относительный (тот же origin), логин/cookie без CORS.
+const FORCE_SERVER = (import.meta.env.VITE_SERVER_MODE as string | undefined) === 'true'
+
+/** Включён ли серверный режим (задан адрес API или forced same-origin). */
+export const serverMode = (): boolean => FORCE_SERVER || API_BASE.length > 0
 
 export interface CloudUser {
   id: number
