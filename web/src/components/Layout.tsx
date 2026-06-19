@@ -1,11 +1,11 @@
 import { Suspense, useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
 import { IconHelp, IconMenu } from './icons'
 import { Sidebar } from './Sidebar'
 
 export function Layout() {
+  const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [storageFull, setStorageFull] = useState(false)
 
   // Хранилище браузера переполнено — данные критичны, предупреждаем явно (не молча).
@@ -74,54 +74,16 @@ export function Layout() {
         </main>
       </div>
 
-      {/* Кнопка поддержки в правом нижнем углу — как у Эльбы */}
+      {/* Кнопка помощи в правом нижнем углу — ведёт на экран «Помощь» с поиском */}
       <button
         type="button"
-        aria-label="Помощь и поддержка"
+        aria-label="Помощь и о программе"
         title="Помощь"
-        onClick={() => setHelpOpen(true)}
+        onClick={() => navigate('/help')}
         className="fixed bottom-5 right-5 z-20 grid h-11 w-11 place-items-center rounded-full bg-ink text-white shadow-card transition-colors hover:bg-slate-700"
       >
         <IconHelp size={22} />
       </button>
-
-      {helpOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => setHelpOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl bg-white p-6 shadow-card"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-lg font-semibold text-ink">Помощь</h2>
-            <p className="mt-2 text-sm text-slate-700">
-              «СвояКнига» — онлайн-бухгалтерия для ИП на УСН. Все расчёты прозрачны: на каждом
-              экране видно, как получилась сумма, а в «Настройках» — какие параметры и из какой
-              статьи НК РФ взяты. Данные сохраняются в этом браузере.
-            </p>
-            <ul className="mt-3 space-y-1.5 text-sm text-slate-700">
-              <li>• <b>Налоги</b> — расчёт УСН, взносов, НДС и сроков.</li>
-              <li>• <b>Отчётность</b> — все декларации и отчёты в одном месте.</li>
-              <li>• <b>Деньги</b> — операции и КУДиР (можно загрузить выписку банка).</li>
-              <li>• <b>Реквизиты</b> и <b>Настройки</b> — данные ИП и параметры налогов по годам.</li>
-            </ul>
-            <p className="mt-3 text-xs text-muted">
-              Корректность сумм перед сдачей подтверждает бухгалтер. Подпись КЭП и отправка — пока
-              в демо-режиме.
-            </p>
-            <div className="mt-5 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setHelpOpen(false)}
-                className="cursor-pointer rounded-lg border border-line px-4 py-2 text-sm font-medium text-muted transition-colors hover:bg-slate-50"
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

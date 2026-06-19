@@ -20,6 +20,7 @@ const Archive = lazy(() => import('./pages/Archive').then((m) => ({ default: m.A
 const TaxOffice = lazy(() => import('./pages/TaxOffice').then((m) => ({ default: m.TaxOffice })))
 const UsefulDocs = lazy(() => import('./pages/UsefulDocs').then((m) => ({ default: m.UsefulDocs })))
 const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })))
+const Help = lazy(() => import('./pages/Help').then((m) => ({ default: m.Help })))
 
 export default function App() {
   return (
@@ -42,6 +43,7 @@ export default function App() {
           <Route path="/tax-office" element={<TaxOffice />} />
           <Route path="/useful-docs" element={<UsefulDocs />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/help" element={<Help />} />
           <Route path="*" element={<Dashboard />} />
         </Route>
       </Routes>

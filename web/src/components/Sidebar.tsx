@@ -11,6 +11,7 @@ import {
   IconCard,
   IconCheck,
   IconDoc,
+  IconHelp,
   IconId,
   IconInfo,
   IconPackage,
@@ -42,6 +43,7 @@ export const NAV = [
   { to: '/requisites', label: 'Реквизиты', Icon: IconBuilding },
   { to: '/settings', label: 'Настройки', Icon: IconSettings },
   { to: '/admin', label: 'Администрирование', Icon: IconAlert },
+  { to: '/help', label: 'Помощь', Icon: IconHelp },
 ] as const
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
