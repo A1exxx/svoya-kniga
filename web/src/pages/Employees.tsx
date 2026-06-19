@@ -551,7 +551,25 @@ function SalaryCalc({ year }: { year: number }) {
     if (!selEmp) return
     const next = accruedArr.slice()
     next[mi] = val
-    updateEmployee(selEmp.id, { accruedMonths: { ...(selEmp.accruedMonths ?? {}), [year]: next } })
+    const patch: Partial<Employee> = { accruedMonths: { ...(selEmp.accruedMonths ?? {}), [year]: next } }
+    // Снятие начисления снимает и отметку выдачи за этот месяц.
+    if (!val && (selEmp.paidMonths?.[year]?.[mi] ?? false)) {
+      const p = (selEmp.paidMonths?.[year] ?? []).slice()
+      while (p.length < 12) p.push(false)
+      p[mi] = false
+      patch.paidMonths = { ...(selEmp.paidMonths ?? {}), [year]: p }
+    }
+    updateEmployee(selEmp.id, patch)
+  }
+  // Выдача (выплата) зарплаты по месяцам — отдельная отметка по факту.
+  const paidArr = (selEmp?.paidMonths?.[year] ?? []).slice()
+  while (paidArr.length < 12) paidArr.push(false)
+  const isPaid = (mi: number) => !!paidArr[mi]
+  const setPaid = (mi: number, val: boolean) => {
+    if (!selEmp) return
+    const next = paidArr.slice()
+    next[mi] = val
+    updateEmployee(selEmp.id, { paidMonths: { ...(selEmp.paidMonths ?? {}), [year]: next } })
   }
   const accTot = accIdx.reduce(
     (a, i) => {
@@ -725,8 +743,9 @@ function SalaryCalc({ year }: { year: number }) {
                       <th className="py-2 pr-3 text-right font-medium">Дней</th>
                       <th className="py-2 pr-3 text-right font-medium">Начислено</th>
                       <th className="py-2 pr-3 text-right font-medium">Удержано</th>
-                      <th className="py-2 pr-3 text-right font-medium">Выдано</th>
+                      <th className="py-2 pr-3 text-right font-medium">К выдаче</th>
                       <th className="py-2 pr-3 text-right font-medium">Взносы</th>
+                      <th className="py-2 pr-3 text-center font-medium">Выплата</th>
                       <th className="py-2"></th>
                     </tr>
                   </thead>
@@ -753,6 +772,32 @@ function SalaryCalc({ year }: { year: number }) {
                           <td className="tnum py-2 pr-3 text-right text-muted">
                             {dec(mm.vznosy.plus(mm.travmatizm))}
                           </td>
+                          <td className="py-2 pr-3 text-center">
+                            {isPaid(i) ? (
+                              <button
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.stopPropagation()
+                                  setPaid(i, false)
+                                }}
+                                className="cursor-pointer rounded-full bg-ok/10 px-2 py-0.5 text-[11px] font-medium text-ok"
+                                title="Снять отметку о выдаче"
+                              >
+                                Выплачено ✓
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={(ev) => {
+                                  ev.stopPropagation()
+                                  setPaid(i, true)
+                                }}
+                                className="cursor-pointer rounded-lg border border-line px-2 py-0.5 text-[11px] font-medium text-ink transition-colors hover:border-ok hover:text-ok"
+                              >
+                                Выплатить
+                              </button>
+                            )}
+                          </td>
                           <td className="py-2 text-right">
                             <button
                               type="button"
@@ -778,6 +823,9 @@ function SalaryCalc({ year }: { year: number }) {
                       <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(accTot.ndfl)}</td>
                       <td className="tnum py-2 pr-3 text-right">{formatRub(accTot.net)}</td>
                       <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(accTot.vz)}</td>
+                      <td className="py-2 pr-3 text-center text-xs text-muted">
+                        выдано {accIdx.filter(isPaid).length}/{accIdx.length}
+                      </td>
                       <td className="py-2"></td>
                     </tr>
                   </tfoot>

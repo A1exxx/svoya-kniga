@@ -59,6 +59,8 @@ export interface Employee {
    * Месяц без начисления НЕ показывается в «Зарплата по месяцам» (не заполняем вперёд).
    */
   accruedMonths?: Record<number, boolean[]>
+  /** Выдача зарплаты по факту: 12 флагов на год — выплачена ли зарплата за месяц. */
+  paidMonths?: Record<number, boolean[]>
   /** Алименты: удерживать по исполнительному листу / соглашению */
   alimonyEnabled?: boolean
   /** Способ: доля от дохода (по числу детей) или твёрдая сумма */
@@ -103,6 +105,7 @@ const EMP_DEFAULTS: Omit<Employee, 'id'> = {
   vacations: [],
   sickLeaves: [],
   accruedMonths: {},
+  paidMonths: {},
   alimonyEnabled: false,
   alimonyMode: 'share',
   alimonyChildren: 1,
