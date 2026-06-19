@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { formatDate } from '../lib/format'
+import { code39Svg } from '../lib/barcode'
 
 /**
  * Примитивы для печатных форм ФНС «как официальный бланк»: клеточные поля (по одному
@@ -118,6 +119,49 @@ export function OfficialNote({ extra }: { extra?: ReactNode }) {
       «Налогоплательщик ЮЛ» или в ЛК ФНС — она напечатает машиночитаемую форму с двумерным
       штрих-кодом. Сформировано в «СвояКнига» {formatDate(new Date().toISOString().slice(0, 10))}.
       {extra ? <> {extra}</> : null}
+    </div>
+  )
+}
+
+/** Штрих-код страницы (Code 39) + номер под ним — как в верхнем левом углу бланков ФНС. */
+export function PageBarcode({ code }: { code: string }) {
+  return (
+    <div className="leading-none">
+      <div
+        className="[&>svg]:block [&>svg]:h-[26px]"
+        dangerouslySetInnerHTML={{ __html: code39Svg(code, { height: 26, narrow: 1 }) }}
+      />
+      <div className="mt-0.5 text-center font-mono text-[10px] tracking-[0.2em]">{code}</div>
+    </div>
+  )
+}
+
+/** Верх официального листа: штрих-код страницы слева + ИНН/КПП/Стр. клетками справа. */
+export function OfficialTop({
+  code,
+  inn,
+  kpp,
+  page = '001',
+}: {
+  code: string
+  inn?: string
+  kpp?: string
+  page?: string
+}) {
+  return (
+    <div className="mb-2 flex items-start justify-between">
+      <PageBarcode code={code} />
+      <div className="text-[11px] text-slate-600">
+        <div className="flex items-center justify-end gap-1">
+          ИНН <Cells value={inn} count={12} />
+        </div>
+        <div className="mt-1 flex items-center justify-end gap-1">
+          КПП <Cells value={kpp} count={9} />
+        </div>
+        <div className="mt-1 flex items-center justify-end gap-1">
+          Стр. <Cells value={page} count={3} />
+        </div>
+      </div>
     </div>
   )
 }
