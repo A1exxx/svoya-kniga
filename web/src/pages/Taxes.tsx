@@ -3,7 +3,7 @@ import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg, type OrgVatMode } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
-import { getParams, calcVatUsn, type UsnObject } from '../lib/taxcore'
+import { getParams, calcVatUsn, calcOsnoIp, calcContributions, type UsnObject } from '../lib/taxcore'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -49,6 +49,34 @@ export function Taxes() {
   })()
 
   const isIncome = o.usnObject === 'income'
+  const isOsno = o.taxSystem === 'osno'
+
+  // ОСНО: доходы/расходы из операций «Денег» за год (если есть) или ручной ввод.
+  const yearTaxOps = ops.filter((op) => op.taxable && op.date.startsWith(String(o.year)))
+  const osnoIncome = yearTaxOps.length
+    ? yearTaxOps.filter((x) => x.kind === 'income').reduce((s, x) => s + x.amount, 0)
+    : o.income
+  const osnoExpenses = yearTaxOps.length
+    ? yearTaxOps.filter((x) => x.kind === 'expense').reduce((s, x) => s + x.amount, 0)
+    : o.expenses
+  let osnoRes: ReturnType<typeof calcOsnoIp> | null = null
+  let osnoContr: ReturnType<typeof calcContributions> | null = null
+  if (isOsno) {
+    try {
+      osnoRes = calcOsnoIp(o.year, osnoIncome, osnoExpenses)
+      // Взносы: фикс + 1% с базы (доходы − профвычет), как для объекта «Д − Р».
+      osnoContr = calcContributions(
+        o.year,
+        osnoIncome,
+        osnoRes.professional_deduction.toNumber(),
+        'income_minus',
+        { regDate: o.regDate || undefined }
+      )
+    } catch {
+      osnoRes = null
+      osnoContr = null
+    }
+  }
 
   // Доход для НДС: из операций (поквартальный режим) или ручной — согласовано с расчётом УСН.
   const vatIncome =
@@ -92,29 +120,38 @@ export function Taxes() {
                 </select>
               </Field>
 
-              <Field label="Объект налогообложения">
-                <div className="grid grid-cols-2 gap-2">
-                  {(
-                    [
-                      ['income', 'Доходы 6%'],
-                      ['income_minus', 'Д − Р 15%'],
-                    ] as [UsnObject, string][]
-                  ).map(([val, label]) => (
-                    <button
-                      key={val}
-                      type="button"
-                      onClick={() => updateActiveOrg({ usnObject: val })}
-                      className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                        o.usnObject === val
-                          ? 'border-brand-500 bg-brand-50 text-brand-600'
-                          : 'border-line text-muted hover:border-slate-300'
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+              {isOsno ? (
+                <div className="rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2 text-sm text-ink">
+                  Система: <span className="font-semibold">ОСНО (общая)</span>
+                  <span className="block text-xs text-muted">
+                    НДФЛ + НДС. Сменить систему — в «Реквизитах».
+                  </span>
                 </div>
-              </Field>
+              ) : (
+                <Field label="Объект налогообложения">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(
+                      [
+                        ['income', 'Доходы 6%'],
+                        ['income_minus', 'Д − Р 15%'],
+                      ] as [UsnObject, string][]
+                    ).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => updateActiveOrg({ usnObject: val })}
+                        className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                          o.usnObject === val
+                            ? 'border-brand-500 bg-brand-50 text-brand-600'
+                            : 'border-line text-muted hover:border-slate-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
 
               <Field label="Годовой доход" hint={formatRub(o.income)}>
                 <input
@@ -126,8 +163,11 @@ export function Taxes() {
                 />
               </Field>
 
-              {!isIncome && (
-                <Field label="Годовые расходы" hint={formatRub(o.expenses)}>
+              {(!isIncome || isOsno) && (
+                <Field
+                  label={isOsno ? 'Годовые расходы (подтверждённые)' : 'Годовые расходы'}
+                  hint={formatRub(o.expenses)}
+                >
                   <input
                     type="number"
                     min={0}
@@ -163,7 +203,84 @@ export function Taxes() {
         <div className="space-y-5">
           {error && <Note tone="warn">Ошибка расчёта: {error}</Note>}
 
-          {computed && (
+          {isOsno && osnoRes && (
+            <>
+              <Card>
+                <div className="flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <div className="text-sm text-muted">НДФЛ за год</div>
+                    <div className="tnum mt-1 text-4xl font-semibold text-ink">
+                      {dec(osnoRes.ndfl)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm text-muted">НДС с реализации</div>
+                    <div className="tnum mt-1 text-2xl font-semibold text-brand-600">
+                      {dec(osnoRes.vat)}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              <Card title="НДФЛ — как посчитан">
+                <Row label="Доходы за год" value={dec(osnoRes.income)} />
+                <Row
+                  label={
+                    osnoRes.used_20pct
+                      ? '− Профессиональный вычет 20% (расходы не подтверждены)'
+                      : '− Профессиональный вычет (подтверждённые расходы)'
+                  }
+                  value={dec(osnoRes.professional_deduction)}
+                />
+                <Row label="= База НДФЛ" value={dec(osnoRes.ndfl_base)} />
+                <Row
+                  label="НДФЛ по прогрессивной шкале"
+                  hint="13% до 2,4 млн ₽, далее 15/18/20/22%"
+                  value={dec(osnoRes.ndfl)}
+                  strong
+                />
+                <p className="mt-3 text-xs text-muted">
+                  Профессиональный вычет (ст. 221 НК РФ): берётся бо́льшее из подтверждённых расходов
+                  и 20% от доходов. {yearTaxOps.length > 0 && 'Доходы/расходы — из операций «Денег».'}
+                </p>
+              </Card>
+
+              <Card title="НДС с реализации">
+                <Row label="Ставка НДС" value={`${osnoRes.vat_rate.toNumber()}%`} />
+                <Row label="Выручка (с НДС)" value={dec(osnoRes.income)} />
+                <Row label="НДС в т.ч. (к уплате)" value={dec(osnoRes.vat)} strong />
+                <p className="mt-3 text-xs text-muted">
+                  Оценка НДС с реализации без вычета входящего НДС (для вычета нужны счёт-фактуры
+                  поставщиков — учёт в развитии). Освобождение по ст. 145 НК РФ — при выручке ≤ 2 млн
+                  ₽ за 3 месяца.
+                </p>
+              </Card>
+
+              {osnoContr && (
+                <Card title="Страховые взносы «за себя»">
+                  <Row
+                    label="Фиксированные"
+                    hint={`до ${formatDate(osnoContr.fixed_due)}`}
+                    value={dec(osnoContr.fixed)}
+                  />
+                  <Row
+                    label="1% с базы свыше 300 000 ₽"
+                    hint={`до ${formatDate(osnoContr.one_percent_due)}`}
+                    value={dec(osnoContr.one_percent)}
+                  />
+                  <Row label="Итого взносов" value={dec(osnoContr.total)} strong />
+                </Card>
+              )}
+
+              <Note tone="warn">
+                ОСНО — базовый модуль: считаются НДФЛ, НДС и взносы. Декларация 3-НДФЛ, авансовые
+                платежи по НДФЛ (28 апреля/июля/октября), КУДиР по приказу 86н и декларация по НДС
+                для ОСНО — в развитии. Для УСН все формы и календарь уже готовы.
+              </Note>
+            </>
+          )}
+
+          {!isOsno && computed && (
             <>
               <Card>
                 <div className="flex flex-wrap items-end justify-between gap-4">

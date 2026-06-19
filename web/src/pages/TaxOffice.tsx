@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useOrg } from '../state/orgStore'
+import { useOps } from '../state/opsStore'
+import { usePayments } from '../state/paymentsStore'
 import { useTaxOffice } from '../state/taxOfficeStore'
+import { compute } from '../lib/compute'
 import { formatRub, formatDate } from '../lib/format'
-import { Card, Field, Note, inputClass } from '../components/ui'
+import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { SendDemoModal } from '../components/SendDemoModal'
 import { activeGateway, RECONCILIATION_LABEL, type ReconciliationKind } from '../lib/fns/gateway'
 
@@ -31,6 +34,23 @@ export function TaxOffice() {
 
   const latest = data.balances[0] ?? null
   const letters = data.letters.filter((l) => l.authority === authority)
+
+  // Локальная сверка ЕНС: обязательства (по расчёту) vs внесено платёжками ЕНС.
+  const { ops } = useOps()
+  const { payments } = usePayments()
+  let computed: ReturnType<typeof compute> | null = null
+  try {
+    computed = compute(activeOrg, ops)
+  } catch {
+    computed = null
+  }
+  const usnDue = computed ? computed.usn.tax_year_final.toNumber() : 0
+  const contrDue = computed ? computed.contr.total.toNumber() : 0
+  const obligation = usnDue + contrDue
+  const ensPaid = payments
+    .filter((p) => p.kind === 'ens' && p.status === 'paid')
+    .reduce((s, p) => s + p.amount, 0)
+  const ensDiff = ensPaid - obligation
 
   const requestRecon = async (kind: ReconciliationKind) => {
     const res = await gw.requestReconciliation(kind)
@@ -129,6 +149,63 @@ export function TaxOffice() {
               ))}
             </div>
           )}
+        </Card>
+      </div>
+
+      {/* Распределение и локальная сверка ЕНС */}
+      <div className="mt-5">
+        <Card title="Распределение и сверка ЕНС">
+          <p className="mb-3 text-sm text-muted">
+            Локальная сверка по вашим данным: что должно уйти на ЕНС (по расчёту) против того, что
+            уже оплачено платёжками типа «ЕНС». Помогает поймать недоплату до требования ФНС.
+          </p>
+          <div className="rounded-lg border border-line">
+            <div className="px-3 py-2">
+              <Row label="Налог УСН за год" value={formatRub(usnDue)} />
+              <Row label="Страховые взносы «за себя»" value={formatRub(contrDue)} />
+              <Row label="= Итого обязательства" value={formatRub(obligation)} strong />
+            </div>
+            <div className="border-t border-line px-3 py-2">
+              <Row label="Внесено на ЕНС (оплаченные платёжки)" value={formatRub(ensPaid)} />
+              {latest && (
+                <Row
+                  label={`Сальдо из ЛК ФНС на ${formatDate(latest.date)}`}
+                  value={formatRub(latest.saldo)}
+                />
+              )}
+            </div>
+          </div>
+
+          <div
+            className={`mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm ${
+              ensDiff < 0
+                ? 'bg-red-50 text-danger dark:bg-red-950/30'
+                : 'bg-green-50 text-ok dark:bg-green-950/30'
+            }`}
+          >
+            <span className="font-medium">
+              {ensDiff < 0
+                ? `Не хватает на ЕНС: ${formatRub(-ensDiff)} — доплатите, чтобы избежать пеней.`
+                : obligation > 0
+                  ? `Внесено достаточно (запас ${formatRub(ensDiff)}).`
+                  : 'Обязательства за год пока нулевые.'}
+            </span>
+            {ensDiff < 0 && (
+              <a href="#/payments" className="shrink-0 font-medium underline">
+                Создать платёжку ЕНС →
+              </a>
+            )}
+          </div>
+
+          <Note tone="warn">
+            <strong>Сообщение для бухгалтера.</strong> Реальное сальдо ЕНС и распределение денег по
+            налогам видит только ФНС — это налоговая тайна (ст. 102 НК РФ). Автоматически «по ИНН»
+            подтянуть его нельзя: нужен вход в ЛК ФНС по КЭП либо подключение оператора ЭДО
+            (Контур/Астрал/СБИС) с ИОН-запросами. Поэтому сверка выше — локальная (наш расчёт против
+            ваших оплат), а сальдо из ЛК вносится вручную. Сверяйте «разницу» с сальдо из ЛК: если
+            расходятся — проверьте, поданы ли уведомления об исчисленных суммах (раздел «Полезные
+            документы»). Реальная синхронизация с ФНС — на серверном этапе (см. план FNS-INTEGRATION).
+          </Note>
         </Card>
       </div>
 

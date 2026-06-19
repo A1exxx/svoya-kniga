@@ -66,6 +66,7 @@ export interface Payment {
   payeeAccount: string
   payeeBank: string
   payeeBik: string
+  payeeCorrAccount?: string // корр. счёт банка получателя (Сч. № банка)
   purpose: string // назначение платежа
   vat?: string // ставка НДС в платеже: 'none' | '5' | '7' | '10' | '20' | '22'
   taxable?: boolean // учитывать в расходах УСН (после оплаты)

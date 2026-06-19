@@ -57,6 +57,12 @@ export function Dashboard() {
   const urgent = events.filter((e) => e.days >= 0 && e.days <= 3)
   const thisMonth = events.filter((e) => e.days > 3 && e.days <= 31)
   const future = events.filter((e) => e.days > 31)
+  // Блок «Сегодня»: задачи строго на сегодня + ближайшее предстоящее событие.
+  const todayTasks = events.filter((e) => e.days === 0)
+  const nextUp = events.filter((e) => e.days > 0).sort((a, b) => a.days - b.days)[0] ?? null
+  const now = new Date()
+  const todayStr = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const dowStr = now.toLocaleDateString('ru-RU', { weekday: 'long' })
 
   type Ev = (typeof events)[number]
   const markDone = (e: Ev) =>
@@ -168,6 +174,41 @@ export function Dashboard() {
           <IconChevron size={16} />
         </Link>
       </header>
+
+      {/* «Сегодня» — открыл и сразу видно, что делать именно сегодня (или ближайшее). */}
+      <div className="mb-6">
+        <Card title={`Сегодня — ${todayStr}, ${dowStr}`}>
+          {todayTasks.length > 0 ? (
+            <>
+              <p className="mb-2 text-sm font-medium text-ink">Сегодня нужно:</p>
+              <div className="space-y-1.5">
+                {todayTasks.map((e) => (
+                  <TaskRow key={taskKey(e)} e={e} />
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-muted">
+                На сегодня дел по налогам и отчётности нет.
+              </p>
+              {nextUp ? (
+                <div className="rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/40">
+                  <span className="text-muted">Ближайшее: </span>
+                  <span className="font-medium text-ink">{nextUp.title}</span>
+                  <span className="text-muted">
+                    {' '}
+                    — {formatDate(nextUp.due)}{' '}
+                    {nextUp.days === 1 ? '(завтра)' : `(через ${nextUp.days} дн.)`}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-sm text-muted">Предстоящих задач нет.</span>
+              )}
+            </div>
+          )}
+        </Card>
+      </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>

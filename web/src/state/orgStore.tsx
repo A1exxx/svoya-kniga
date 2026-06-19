@@ -13,6 +13,9 @@ const orgLabel = (o: { name?: string; fio?: string; inn?: string }) =>
  */
 export type OrgVatMode = 'auto' | 'none' | 'rate5' | 'rate7' | 'rate10' | 'general'
 
+/** Система налогообложения: УСН (упрощёнка) или ОСНО (общая — НДФЛ 13/15% + НДС). */
+export type TaxSystem = 'usn' | 'osno'
+
 /** Организация (ИП): реквизиты + система налогообложения + рабочие финансы. */
 export interface Org {
   id: string
@@ -32,6 +35,7 @@ export interface Org {
   bankAccount: string
   bik: string
   bankName: string
+  corrAccount: string // корр. счёт банка (Сч. № банка в платёжке/счёте)
   // Электронная подпись (КЭП)
   espOwner: string // владелец/серийный номер сертификата
   espValidTo: string // срок действия КЭП, YYYY-MM-DD
@@ -40,6 +44,7 @@ export interface Org {
   signature?: string
   stamp?: string
   // Система налогообложения
+  taxSystem: TaxSystem // 'usn' (упрощёнка) или 'osno' (общая система)
   usnObject: UsnObject
   ausn: boolean // признак АУСН (автоматизированная УСН)
   tradeFee: boolean // плательщик торгового сбора
@@ -78,8 +83,10 @@ function demoOrg(): Org {
     bankAccount: '',
     bik: '',
     bankName: '',
+    corrAccount: '',
     espOwner: '',
     espValidTo: '',
+    taxSystem: 'usn',
     usnObject: 'income',
     ausn: false,
     tradeFee: false,

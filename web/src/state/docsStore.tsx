@@ -211,3 +211,25 @@ export function docTotals(doc: Doc) {
   const round2 = (d: Decimal) => d.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
   return { subtotal: round2(subtotalD), rate, vat: round2(vatD) }
 }
+
+/**
+ * Построчная разбивка НДС для печатной формы счёта (модель «НДС в т.ч.» — как в
+ * docTotals). Возвращает по каждой строке сумму без НДС / НДС / с НДС, и итоги,
+ * согласованные с docTotals (одна модель округления). */
+export function docLineTotals(doc: Doc) {
+  const { subtotal, rate, vat } = docTotals(doc)
+  const round2 = (d: Decimal) => d.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+  const divisor = new Decimal(1).plus(new Decimal(rate).div(100))
+  const lines = doc.items.map((it) => {
+    const gross = new Decimal(it.qty || 0).times(it.price || 0)
+    const net = rate > 0 ? gross.div(divisor) : gross
+    return { gross: round2(gross), net: round2(net), vat: round2(gross.minus(net)) }
+  })
+  return {
+    rate,
+    lines,
+    totalNet: round2(new Decimal(subtotal).minus(vat)),
+    totalVat: vat,
+    totalGross: subtotal,
+  }
+}

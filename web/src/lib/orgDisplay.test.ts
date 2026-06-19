@@ -23,6 +23,8 @@ function org(p: Partial<Org>): Org {
     bankAccount: '',
     bik: '',
     bankName: '',
+    corrAccount: '',
+    taxSystem: 'usn',
     usnObject: 'income',
     regionalRate: null,
     hasEmployees: false,

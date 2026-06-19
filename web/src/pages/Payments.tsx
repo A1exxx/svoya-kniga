@@ -14,6 +14,7 @@ import { Card, Field, Note, inputClass } from '../components/ui'
 import { IconPlus } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
 import { PaymentOrderDoc } from '../components/PaymentOrderDoc'
+import { ENS_PAYEE as ENS_REQ } from '../lib/treasuryEns'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -32,14 +33,15 @@ const VAT_OPTIONS: [string, string][] = [
   ['22', 'НДС 22%'],
 ]
 
-/** Реквизиты получателя единого налогового платежа (ЕНП) — едины для всей РФ с 2023 г. */
+/** Реквизиты получателя ЕНП (единый счёт Казначейства, Тула) — для префилла формы. */
 const ENS_PAYEE = {
-  payeeName: 'Казначейство России (ФНС России)',
-  payeeInn: '7727406020',
-  payeeKpp: '770801001',
-  payeeAccount: '03100643000000018500',
-  payeeBank: 'ОТДЕЛЕНИЕ ТУЛА БАНКА РОССИИ//УФК по Тульской области, г. Тула',
-  payeeBik: '017003983',
+  payeeName: ENS_REQ.name,
+  payeeInn: ENS_REQ.inn,
+  payeeKpp: ENS_REQ.kpp,
+  payeeAccount: ENS_REQ.account,
+  payeeBank: ENS_REQ.bank,
+  payeeBik: ENS_REQ.bik,
+  payeeCorrAccount: ENS_REQ.corrAccount,
   purpose: 'Единый налоговый платёж',
 }
 
@@ -311,6 +313,13 @@ export function Payments() {
                   className={inputClass}
                   value={draft.payeeBik}
                   onChange={(e) => setDraft({ ...draft, payeeBik: e.target.value })}
+                />
+              </Field>
+              <Field label="Корр. счёт банка получателя">
+                <input
+                  className={inputClass}
+                  value={draft.payeeCorrAccount || ''}
+                  onChange={(e) => setDraft({ ...draft, payeeCorrAccount: e.target.value })}
                 />
               </Field>
             </>

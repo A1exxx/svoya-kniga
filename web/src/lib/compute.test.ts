@@ -18,6 +18,8 @@ function makeOrg(patch: Partial<Org> = {}): Org {
     bankAccount: '',
     bik: '',
     bankName: '',
+    corrAccount: '',
+    taxSystem: 'usn',
     usnObject: 'income',
     okpo: '', taxOfficeCode: '', phone: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false, regionalRate: null,
     hasEmployees: false,

@@ -31,6 +31,7 @@ from .payroll import (
     get_payroll,
     ndfl_progressive,
 )
+from .osno import OsnoResult, calc_osno_ip
 
 __all__ = [
     # models

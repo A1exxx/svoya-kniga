@@ -1,6 +1,6 @@
 import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
-import { docTotals, type Doc } from '../state/docsStore'
+import { docTotals, docLineTotals, type Doc } from '../state/docsStore'
 import { rublesToWords } from '../lib/numberToWords'
 
 const r = (n: number) => formatRub(n, { kopecks: true })
@@ -8,6 +8,8 @@ const r = (n: number) => formatRub(n, { kopecks: true })
 /** Печатная форма счёта на оплату или акта выполненных работ. Продавец = организация. */
 export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
   const { subtotal, rate, vat } = docTotals(doc)
+  const { lines, totalNet } = docLineTotals(doc)
+  const hasVat = rate > 0
   const isInvoice = doc.type === 'invoice'
   const isAct = doc.type === 'act'
   const sellerLabel = isAct ? 'Исполнитель' : 'Поставщик'
@@ -48,7 +50,9 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
             <tr>
               <td className={cell}>
                 <div className={lbl}>Сч. № (корр.)</div>
-                <div className="tnum text-slate-400">—</div>
+                <div className={`tnum ${org.corrAccount ? '' : 'text-slate-400'}`}>
+                  {org.corrAccount || '—'}
+                </div>
               </td>
             </tr>
             <tr>
@@ -92,9 +96,17 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
           <tr className="border-y border-slate-300 text-left">
             <th className="w-8 py-1.5 pr-2 font-semibold">№</th>
             <th className="py-1.5 pr-2 font-semibold">Наименование</th>
-            <th className="w-16 py-1.5 pr-2 text-right font-semibold">Кол-во</th>
-            <th className="w-28 py-1.5 pr-2 text-right font-semibold">Цена</th>
-            <th className="w-32 py-1.5 text-right font-semibold">Сумма</th>
+            <th className="w-14 py-1.5 pr-2 text-right font-semibold">Кол-во</th>
+            <th className="w-24 py-1.5 pr-2 text-right font-semibold">Цена</th>
+            {hasVat ? (
+              <>
+                <th className="w-28 py-1.5 pr-2 text-right font-semibold">Сумма без НДС</th>
+                <th className="w-24 py-1.5 pr-2 text-right font-semibold">НДС {rate}%</th>
+                <th className="w-28 py-1.5 text-right font-semibold">Сумма с НДС</th>
+              </>
+            ) : (
+              <th className="w-32 py-1.5 text-right font-semibold">Сумма</th>
+            )}
           </tr>
         </thead>
         <tbody>
@@ -104,28 +116,44 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
               <td className="py-1.5 pr-2">{it.name || '—'}</td>
               <td className="tnum py-1.5 pr-2 text-right">{it.qty}</td>
               <td className="tnum py-1.5 pr-2 text-right">{r(it.price)}</td>
-              <td className="tnum py-1.5 text-right">{r(it.qty * it.price)}</td>
+              {hasVat ? (
+                <>
+                  <td className="tnum py-1.5 pr-2 text-right">{r(lines[i]?.net ?? 0)}</td>
+                  <td className="tnum py-1.5 pr-2 text-right">{r(lines[i]?.vat ?? 0)}</td>
+                  <td className="tnum py-1.5 text-right">{r(lines[i]?.gross ?? 0)}</td>
+                </>
+              ) : (
+                <td className="tnum py-1.5 text-right">{r(lines[i]?.gross ?? 0)}</td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
 
       <div className="mt-3 flex flex-col items-end gap-0.5 text-[12.5px]">
-        <div>
-          Итого: <span className="tnum font-semibold">{r(subtotal)}</span>
-        </div>
-        <div className="text-slate-600">
-          {rate > 0 ? (
-            <>
-              В том числе НДС {rate}%: <span className="tnum">{r(vat)}</span>
-            </>
-          ) : (
-            <>Без НДС</>
-          )}
-        </div>
-        <div className="mt-1 text-sm">
-          Всего к оплате: <span className="tnum font-semibold">{r(subtotal)}</span>
-        </div>
+        {hasVat ? (
+          <>
+            <div>
+              Итого без НДС: <span className="tnum font-semibold">{r(totalNet)}</span>
+            </div>
+            <div className="text-slate-600">
+              НДС {rate}%: <span className="tnum">{r(vat)}</span>
+            </div>
+            <div className="mt-1 text-sm">
+              Всего к оплате (с НДС): <span className="tnum font-semibold">{r(subtotal)}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              Итого: <span className="tnum font-semibold">{r(subtotal)}</span>
+            </div>
+            <div className="text-slate-600">Без НДС</div>
+            <div className="mt-1 text-sm">
+              Всего к оплате: <span className="tnum font-semibold">{r(subtotal)}</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="mt-3 text-[12.5px]">

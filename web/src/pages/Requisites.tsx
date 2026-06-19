@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useOrg, type Org, type OrgVatMode } from '../state/orgStore'
+import { useOrg, type Org, type OrgVatMode, type TaxSystem } from '../state/orgStore'
 import { type UsnObject, calcVatUsn, getParams } from '../lib/taxcore'
 import { getDadataToken, isValidInnLength, lookupInn } from '../lib/innLookup'
 import { isPlaceholderName, orgDisplayName, requisitesProgress } from '../lib/orgDisplay'
@@ -55,6 +55,21 @@ export function Requisites() {
   const [busy, setBusy] = useState(false)
   const [innMsg, setInnMsg] = useState<string | null>(null)
   const progress = requisitesProgress(o)
+
+  // Базовые ставки УСН — из параметров года («Настройки»), а не захардкожены.
+  // Эффективная ставка = региональная (если задана) или базовая для объекта.
+  const yp = (() => {
+    try {
+      return getParams(o.year)
+    } catch {
+      return null
+    }
+  })()
+  const baseIncomeRate = yp ? Number((yp.usn_income_rate.toNumber() * 100).toFixed(2)) : 6
+  const baseMinusRate = yp ? Number((yp.usn_income_minus_rate.toNumber() * 100).toFixed(2)) : 15
+  const baseRate = o.usnObject === 'income' ? baseIncomeRate : baseMinusRate
+  const effectiveRate = o.regionalRate != null ? o.regionalRate : baseRate
+  const generalVatRate = yp ? yp.vat_general_rate.toNumber() : 22
   const issues = [
     validateInn(o.inn),
     validateOktmo(o.oktmo),
@@ -207,7 +222,8 @@ export function Requisites() {
           <div className="grid gap-4 sm:grid-cols-2">
             {text('bankAccount', 'Расчётный счёт', '40802810...')}
             {text('bik', 'БИК банка', '044525...')}
-            <div className="sm:col-span-2">{text('bankName', 'Название банка', 'Т-Банк / Сбербанк / ...')}</div>
+            {text('corrAccount', 'Корр. счёт банка', '30101810...', 'Сч. № банка в платёжке и счёте')}
+            {text('bankName', 'Название банка', 'Т-Банк / Сбербанк / ...')}
           </div>
         </Card>
 
@@ -283,20 +299,20 @@ export function Requisites() {
 
         <Card title="Система налогообложения">
           <div className="space-y-4">
-            <Field label="Объект УСН">
+            <Field label="Система">
               <div className="grid max-w-md grid-cols-2 gap-2">
                 {(
                   [
-                    ['income', 'Доходы 6%'],
-                    ['income_minus', 'Доходы − расходы 15%'],
-                  ] as [UsnObject, string][]
+                    ['usn', 'УСН (упрощёнка)'],
+                    ['osno', 'ОСНО (общая)'],
+                  ] as [TaxSystem, string][]
                 ).map(([val, label]) => (
                   <button
                     key={val}
                     type="button"
-                    onClick={() => updateActiveOrg({ usnObject: val })}
+                    onClick={() => updateActiveOrg({ taxSystem: val })}
                     className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                      o.usnObject === val
+                      o.taxSystem === val
                         ? 'border-brand-500 bg-brand-50 text-brand-600'
                         : 'border-line text-muted hover:border-slate-300'
                     }`}
@@ -307,24 +323,87 @@ export function Requisites() {
               </div>
             </Field>
 
-            <Field
-              label="Региональная ставка, %"
-              hint="оставьте пустым для базовой (6% или 15%); регион может снизить"
-            >
-              <input
-                type="number"
-                step="any"
-                min={0}
-                className={`${inputClass} max-w-[180px]`}
-                placeholder="базовая"
-                value={o.regionalRate ?? ''}
-                onChange={(e) =>
-                  updateActiveOrg({
-                    regionalRate: e.target.value === '' ? null : Math.max(0, Number(e.target.value)),
-                  })
-                }
-              />
-            </Field>
+            {o.taxSystem === 'usn' ? (
+              <>
+                <Field label="Объект УСН">
+                  <div className="grid max-w-md grid-cols-2 gap-2">
+                    {(
+                      [
+                        ['income', `Доходы ${baseIncomeRate}%`],
+                        ['income_minus', `Доходы − расходы ${baseMinusRate}%`],
+                      ] as [UsnObject, string][]
+                    ).map(([val, label]) => (
+                      <button
+                        key={val}
+                        type="button"
+                        onClick={() => updateActiveOrg({ usnObject: val })}
+                        className={`cursor-pointer rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                          o.usnObject === val
+                            ? 'border-brand-500 bg-brand-50 text-brand-600'
+                            : 'border-line text-muted hover:border-slate-300'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+
+                <Field
+                  label="Региональная ставка, %"
+                  hint="оставьте пустым — возьмётся базовая; регион может снизить (доходы до 1%, Д−Р до 5%)"
+                >
+                  <input
+                    type="number"
+                    step="any"
+                    min={0}
+                    className={`${inputClass} max-w-[180px]`}
+                    placeholder={`базовая ${baseRate}%`}
+                    value={o.regionalRate ?? ''}
+                    onChange={(e) =>
+                      updateActiveOrg({
+                        regionalRate:
+                          e.target.value === '' ? null : Math.max(0, Number(e.target.value)),
+                      })
+                    }
+                  />
+                </Field>
+
+                <div className="max-w-md rounded-lg border border-brand-100 bg-brand-50/60 px-3 py-2.5 text-sm">
+                  <span className="text-muted">Применяется ставка: </span>
+                  <span className="font-semibold text-brand-600">{effectiveRate}%</span>
+                  <p className="mt-1 text-xs text-muted">
+                    Базовая ставка ({baseRate}%) задаётся в «Настройках → параметры налогов по годам»
+                    для {o.year} года. Если регион её снизил — впишите свою в поле выше; она
+                    применится здесь и в расчёте на «Налоги».
+                  </p>
+                </div>
+
+                <label className="flex cursor-pointer items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
+                    checked={o.ausn}
+                    onChange={(e) => updateActiveOrg({ ausn: e.target.checked })}
+                  />
+                  <span className="text-sm text-ink">
+                    АУСН{' '}
+                    <span className="text-muted">
+                      (автоматизированная УСН — без взносов и деклараций)
+                    </span>
+                  </span>
+                </label>
+              </>
+            ) : (
+              <Note tone="info">
+                <strong>ОСНО — общая система налогообложения.</strong> ИП платит НДФЛ по
+                прогрессивной шкале (13% до 2,4 млн ₽, далее 15/18/20/22%) с прибыли (доходы минус
+                профессиональный вычет — расходы или 20% от доходов) и НДС {generalVatRate}% с
+                реализации. Расчёт — на экране «Налоги». Базовый модуль; полный учёт ОСНО (КУДиР по
+                приказу 86н, авансовые платежи по НДФЛ, вычет входящего НДС по счёт-фактурам) — в
+                развитии. Корректность подтверждает бухгалтер.
+              </Note>
+            )}
 
             <label className="flex cursor-pointer items-center gap-2.5">
               <input
@@ -340,18 +419,6 @@ export function Requisites() {
               <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
-                checked={o.ausn}
-                onChange={(e) => updateActiveOrg({ ausn: e.target.checked })}
-              />
-              <span className="text-sm text-ink">
-                АУСН <span className="text-muted">(автоматизированная УСН — без взносов и деклараций)</span>
-              </span>
-            </label>
-
-            <label className="flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
                 checked={o.tradeFee}
                 onChange={(e) => updateActiveOrg({ tradeFee: e.target.checked })}
               />
@@ -360,25 +427,29 @@ export function Requisites() {
               </span>
             </label>
 
-            <label className="flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
-                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
-                checked={o.vat}
-                onChange={(e) => updateActiveOrg({ vat: e.target.checked })}
-              />
-              <span className="text-sm text-ink">
-                Плательщик НДС на УСН <span className="text-muted">(доход свыше порога)</span>
-              </span>
-            </label>
+            {o.taxSystem === 'usn' && (
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-100"
+                  checked={o.vat}
+                  onChange={(e) => updateActiveOrg({ vat: e.target.checked })}
+                />
+                <span className="text-sm text-ink">
+                  Плательщик НДС на УСН <span className="text-muted">(доход свыше порога)</span>
+                </span>
+              </label>
+            )}
 
-            {o.vat && <VatRateSelect o={o} onChange={(vatMode) => updateActiveOrg({ vatMode })} />}
+            {o.taxSystem === 'usn' && o.vat && (
+              <VatRateSelect o={o} onChange={(vatMode) => updateActiveOrg({ vatMode })} />
+            )}
           </div>
         </Card>
 
         <Note>
-          Данные хранятся локально в браузере (демо-режим) и сразу применяются в расчётах. Объект и
-          ставка отсюда используются на экране «Налоги».
+          Данные хранятся локально в браузере (демо-режим) и сразу применяются в расчётах. Система,
+          объект и ставка отсюда используются на экране «Налоги».
         </Note>
       </div>
     </div>
