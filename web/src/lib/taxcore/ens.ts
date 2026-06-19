@@ -141,11 +141,40 @@ export function usnCalendar(
     ),
   ];
 
-  // Отчётность за сотрудников (когда есть штат).
+  // Отчётность и платежи за сотрудников (когда есть штат). Включаем ежемесячные и
+  // поквартальные обязанности ИП-работодателя — без них бухгалтер не видит «полного» календаря.
   if (opts.hasEmployees) {
+    const MN = [
+      'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+      'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+    ];
+    // Ежемесячно: перссведения (до 25 след.), НДФЛ+взносы ЕНП (до 28 след.), травматизм СФР (до 15 след.).
+    for (let m = 1; m <= 12; m++) {
+      const nm = m === 12 ? 1 : m + 1;
+      const ny = m === 12 ? taxYear + 1 : taxYear;
+      events.push(
+        makeEvent(makeDate(ny, nm, 25), 'report', `Персонифицированные сведения за ${MN[m - 1]}`, null, 'ежемесячно, в ФНС'),
+        makeEvent(makeDate(ny, nm, 28), 'payment', `НДФЛ и страховые взносы за работников за ${MN[m - 1]}`, null, 'ЕНП; уведомление об исчисленных суммах до 25 числа'),
+        makeEvent(makeDate(ny, nm, 15), 'payment', `Взносы на травматизм (СФР) за ${MN[m - 1]}`, null, 'отдельно в СФР, до 15 числа'),
+      );
+    }
+    // Поквартально: 6-НДФЛ, РСВ, ЕФС-1 (раздел 2).
+    const quarters = [
+      { lbl: '1 квартал', mo: 4 },
+      { lbl: 'полугодие', mo: 7 },
+      { lbl: '9 месяцев', mo: 10 },
+    ];
+    for (const { lbl, mo } of quarters) {
+      events.push(
+        makeEvent(makeDate(taxYear, mo, 25), 'report', `6-НДФЛ за ${lbl}`, null, 'в ФНС'),
+        makeEvent(makeDate(taxYear, mo, 25), 'report', `РСВ за ${lbl}`, null, 'в ФНС'),
+        makeEvent(makeDate(taxYear, mo, 25), 'report', `ЕФС-1 (раздел 2) за ${lbl}`, null, 'в СФР'),
+      );
+    }
+    // Годовые.
     events.push(
       makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'РСВ за год', null, 'Расчёт по страховым взносам, в ФНС'),
-      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'ЕФС-1 за год', null, 'в СФР'),
+      makeEvent(makeDate(taxYear + 1, 1, 25), 'report', 'ЕФС-1 (раздел 2) за год', null, 'в СФР'),
       makeEvent(makeDate(taxYear + 1, 2, 25), 'report', '6-НДФЛ за год', null, 'в ФНС'),
     );
   }

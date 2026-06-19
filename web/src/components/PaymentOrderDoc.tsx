@@ -7,6 +7,8 @@ const r = (n: number) => formatRub(n, { kopecks: true })
 
 /** КБК единого налогового платежа (ЕНП) — поле 104 при пополнении ЕНС. */
 const ENP_KBK = '18201061201010000510'
+/** КБК взносов на травматизм в СФР — поле 104 для платежа «травматизм». */
+const INJURY_KBK = '79710212000061000160'
 
 /**
  * Печатная форма платёжного поручения (форма 0401060 по ОКУД).
@@ -15,6 +17,12 @@ const ENP_KBK = '18201061201010000510'
  */
 export function PaymentOrderDoc({ org, payment }: { org: Org; payment: Payment }) {
   const isEns = payment.kind === 'ens'
+  const isInjury = payment.kind === 'injury'
+  const isBudget = isEns || isInjury
+  // Очерёдность платежа (поле 21): зарплата — 3, прочее (налоги, поставщики) — 5.
+  const priority = payment.kind === 'salary' ? '3' : '5'
+  const budgetKbk = isInjury ? INJURY_KBK : ENP_KBK
+  const budgetOktmo = isInjury ? org.oktmo || '—' : '0'
   const cell = 'border border-slate-400 px-1.5 py-1 align-top'
   const lbl = 'text-[10px] text-slate-500'
 
@@ -136,21 +144,21 @@ export function PaymentOrderDoc({ org, payment }: { org: Org; payment: Payment }
             </td>
             <td className={cell}>
               <div className={lbl}>Очер. плат.</div>
-              <div>{isEns ? '5' : '5'}</div>
+              <div>{priority}</div>
             </td>
           </tr>
         </tbody>
       </table>
 
-      {/* Бюджетные поля для ЕНС (поля 101–110) */}
-      {isEns && (
+      {/* Бюджетные поля (поля 101–109): ЕНС или травматизм в СФР */}
+      {isBudget && (
         <table className="mt-1 w-full border-collapse">
           <tbody>
             <tr className="text-center">
               {[
                 ['101', '01'],
-                ['104 (КБК)', ENP_KBK],
-                ['105 (ОКТМО)', '0'],
+                ['104 (КБК)', budgetKbk],
+                ['105 (ОКТМО)', budgetOktmo],
                 ['106', '0'],
                 ['107', '0'],
                 ['108', '0'],
@@ -172,7 +180,14 @@ export function PaymentOrderDoc({ org, payment }: { org: Org; payment: Payment }
           <tr>
             <td className={cell}>
               <div className={lbl}>Назначение платежа</div>
-              <div className="min-h-[2.5rem]">{payment.purpose || '—'}</div>
+              <div className="min-h-[2.5rem]">
+                {payment.purpose || '—'}
+                {payment.vat && payment.vat !== 'none'
+                  ? `. В том числе НДС ${payment.vat}% = ${r(
+                      (payment.amount * Number(payment.vat)) / (100 + Number(payment.vat))
+                    )}`
+                  : ''}
+              </div>
             </td>
           </tr>
         </tbody>

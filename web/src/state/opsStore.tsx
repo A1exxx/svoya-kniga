@@ -13,6 +13,7 @@ export interface Operation {
   doc: string // № первичного документа
   note: string
   taxable: boolean // учитывать в налоге УСН / КУДиР
+  vat?: string // ставка НДС операции: '5'|'7'|'10'|'20'|'22' (для аналитики НДС в «Деньгах»)
 }
 
 const KEY = 'svoyakniga.ops.v1'

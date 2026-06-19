@@ -20,10 +20,51 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
     contract: `Договор № ${doc.number} от ${formatDate(doc.date)}`,
   }
   const title = TITLES[doc.type]
+  const cell = 'border border-slate-400 px-1.5 py-1 align-top'
+  const lbl = 'text-[10px] text-slate-500'
 
   return (
     <div>
       {org.logo && <img src={org.logo} alt="Логотип" className="mb-3 max-h-14 object-contain" />}
+
+      {/* Банковские реквизиты получателя (как в классическом счёте) — только для счёта */}
+      {isInvoice && (
+        <table className="mb-3 w-full border-collapse text-[11px]">
+          <tbody>
+            <tr>
+              <td className={cell} rowSpan={2}>
+                <div className={lbl}>Банк получателя</div>
+                <div className="font-medium">{org.bankName || '—'}</div>
+              </td>
+              <td className={`${cell} w-20`}>
+                <div className={lbl}>БИК</div>
+                <div className="tnum">{org.bik || '—'}</div>
+              </td>
+              <td className={`${cell} w-48`} rowSpan={2}>
+                <div className={lbl}>Сч. №</div>
+                <div className="tnum">{org.bankAccount || '—'}</div>
+              </td>
+            </tr>
+            <tr>
+              <td className={cell}>
+                <div className={lbl}>Сч. № (корр.)</div>
+                <div className="tnum text-slate-400">—</div>
+              </td>
+            </tr>
+            <tr>
+              <td className={cell} colSpan={2}>
+                <div className={lbl}>Получатель — ИНН {org.inn || '—'}, КПП —</div>
+                <div className="font-medium">{org.fio || org.name || '—'}</div>
+              </td>
+              <td className={cell}>
+                <div className={lbl}>Сч. №</div>
+                <div className="tnum">{org.bankAccount || '—'}</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+
       <div className="text-lg font-semibold">{title}</div>
 
       <table className="mt-4 w-full text-[12.5px]">
@@ -33,13 +74,7 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
             <td className="py-1 font-medium">
               {org.fio || org.name || '—'}
               {org.inn && <>, ИНН {org.inn}</>}
-              {isInvoice && (org.bankAccount || org.bankName || org.bik) && (
-                <div className="font-normal text-slate-600">
-                  {org.bankName && <>Банк: {org.bankName}. </>}
-                  {org.bankAccount && <>Р/с: {org.bankAccount}. </>}
-                  {org.bik && <>БИК: {org.bik}.</>}
-                </div>
-              )}
+              {org.address && <span className="font-normal text-slate-600">, {org.address}</span>}
             </td>
           </tr>
           <tr className="align-top">
@@ -100,6 +135,14 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
 
       {doc.note && <div className="mt-4 text-[12.5px] text-slate-600">{doc.note}</div>}
 
+      {isInvoice && (
+        <div className="mt-4 rounded border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+          Внимание! Оплата данного счёта означает согласие с условиями поставки товара (оказания
+          услуг). Счёт действителен в течение 5 банковских дней. Товар (услуга) отпускается по факту
+          поступления денег на расчётный счёт получателя.
+        </div>
+      )}
+
       {!isInvoice && (
         <div className="mt-4 text-[12.5px]">
           Работы (услуги) выполнены полностью и в срок. Заказчик претензий по объёму, качеству и
@@ -107,30 +150,47 @@ export function InvoiceDoc({ org, doc }: { org: Org; doc: Doc }) {
         </div>
       )}
 
-      <div className="mt-10 flex justify-between text-[12.5px]">
-        <div>
+      {isInvoice ? (
+        <div className="mt-10 text-[12.5px]">
           <div className="flex items-end gap-1.5">
-            <span>{sellerLabel}:</span>
+            <span>Руководитель</span>
             {org.signature ? (
               <img src={org.signature} alt="Подпись" className="h-9 object-contain" />
             ) : (
               <span>______________</span>
             )}
-            <span>/ {org.fio || org.name}</span>
+            <span>/ {org.fio || org.name || '________'}</span>
+            {org.stamp && <img src={org.stamp} alt="Печать" className="ml-4 h-16 object-contain" />}
           </div>
-          {org.stamp ? (
-            <img src={org.stamp} alt="Печать" className="mt-1 h-16 object-contain" />
-          ) : (
-            <div className="mt-1 text-slate-400">М.П.</div>
-          )}
+          <div className="mt-3 flex items-end gap-1.5">
+            <span>Главный бухгалтер ______________ / {org.fio || org.name || '________'}</span>
+          </div>
+          {!org.stamp && <div className="mt-2 text-slate-400">М.П.</div>}
         </div>
-        {!isInvoice && (
+      ) : (
+        <div className="mt-10 flex justify-between text-[12.5px]">
+          <div>
+            <div className="flex items-end gap-1.5">
+              <span>{sellerLabel}:</span>
+              {org.signature ? (
+                <img src={org.signature} alt="Подпись" className="h-9 object-contain" />
+              ) : (
+                <span>______________</span>
+              )}
+              <span>/ {org.fio || org.name}</span>
+            </div>
+            {org.stamp ? (
+              <img src={org.stamp} alt="Печать" className="mt-1 h-16 object-contain" />
+            ) : (
+              <div className="mt-1 text-slate-400">М.П.</div>
+            )}
+          </div>
           <div>
             {buyerLabel}: ______________ / {doc.buyer || '________'}
             <div className="mt-1 text-slate-400">М.П.</div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="mt-6 text-[11px] text-slate-400">
         Документ сформирован в «СвояКнига» {formatDate(new Date().toISOString().slice(0, 10))}.

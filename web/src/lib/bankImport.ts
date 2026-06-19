@@ -23,6 +23,18 @@ function parseDate(d: string): string {
   return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
 }
 
+/** Определить ставку НДС из назначения платежа: «в т.ч. НДС 20%», «включая НДС 5 %» и т.п. */
+function detectVat(note: string): string | undefined {
+  const s = (note || '').toLowerCase()
+  if (/без\s+ндс|ндс\s+не\s+облага/.test(s)) return undefined
+  const m = s.match(/ндс[\s:]*?(\d{1,2})\s*%/)
+  if (m) {
+    const r = m[1]
+    if (['5', '7', '10', '20', '22'].includes(r)) return r
+  }
+  return undefined
+}
+
 function toOp(d: Record<string, string>, ourAccount: string): OpDraft {
   const payerAcc = (d['ПлательщикСчет'] || '').trim()
   const payeeAcc = (d['ПолучательСчет'] || '').trim()
@@ -35,6 +47,7 @@ function toOp(d: Record<string, string>, ourAccount: string): OpDraft {
 
   const counterparty = (kind === 'income' ? d['Плательщик'] : d['Получатель']) || ''
   const amount = Number((d['Сумма'] || '0').replace(/\s/g, '').replace(',', '.')) || 0
+  const note = (d['НазначениеПлатежа'] || '').trim()
 
   return {
     date: parseDate(d['Дата'] || ''),
@@ -42,8 +55,9 @@ function toOp(d: Record<string, string>, ourAccount: string): OpDraft {
     amount,
     counterparty: counterparty.trim(),
     doc: d['Номер'] ? `ПП № ${d['Номер'].trim()}` : '',
-    note: (d['НазначениеПлатежа'] || '').trim(),
+    note,
     taxable: true,
+    vat: detectVat(note),
   }
 }
 

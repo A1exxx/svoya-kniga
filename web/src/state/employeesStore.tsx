@@ -54,6 +54,19 @@ export interface Employee {
   vacations?: VacationEvent[]
   /** Больничные сотрудника (периоды) */
   sickLeaves?: SickEvent[]
+  /**
+   * Начисления зарплаты ПО ФАКТУ: для каждого года — 12 флагов (начислен ли месяц).
+   * Месяц без начисления НЕ показывается в «Зарплата по месяцам» (не заполняем вперёд).
+   */
+  accruedMonths?: Record<number, boolean[]>
+  /** Алименты: удерживать по исполнительному листу / соглашению */
+  alimonyEnabled?: boolean
+  /** Способ: доля от дохода (по числу детей) или твёрдая сумма */
+  alimonyMode?: 'share' | 'fixed'
+  /** Детей на алименты (1→1/4, 2→1/3, 3+→1/2) — для доли */
+  alimonyChildren?: number
+  /** Твёрдая сумма алиментов в месяц, ₽ */
+  alimonyFixed?: number
   /** ИП в реестре МСП — льготный тариф взносов */
   msp: boolean
   // Личные данные (для печатных форм карточки)
@@ -89,6 +102,11 @@ const EMP_DEFAULTS: Omit<Employee, 'id'> = {
   earningsByYear: {},
   vacations: [],
   sickLeaves: [],
+  accruedMonths: {},
+  alimonyEnabled: false,
+  alimonyMode: 'share',
+  alimonyChildren: 1,
+  alimonyFixed: 0,
   msp: true,
 }
 

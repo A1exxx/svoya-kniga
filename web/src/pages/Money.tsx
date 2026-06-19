@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useOrg } from '../state/orgStore'
 import { useOps, type Operation } from '../state/opsStore'
-import { useDocs, docTotals } from '../state/docsStore'
+import { useDocs, docTotals, newDocItem } from '../state/docsStore'
 import { usePayments } from '../state/paymentsStore'
 import { formatRub, formatDate } from '../lib/format'
 import { Card, Field, Note, inputClass } from '../components/ui'
@@ -25,13 +26,27 @@ const emptyDraft = (): Draft => ({
   doc: '',
   note: '',
   taxable: true,
+  vat: 'none',
 })
 
+const VAT_OPTIONS: [string, string][] = [
+  ['none', 'Без НДС'],
+  ['5', 'НДС 5%'],
+  ['7', 'НДС 7%'],
+  ['10', 'НДС 10%'],
+  ['20', 'НДС 20%'],
+  ['22', 'НДС 22%'],
+]
+
+/** НДС «в том числе» из суммы с НДС по ставке. */
+const vatIncluded = (amount: number, rate: number) => (rate > 0 ? (amount * rate) / (100 + rate) : 0)
+
 export function Money() {
+  const navigate = useNavigate()
   const { activeOrg, updateActiveOrg } = useOrg()
   const { ops, addOp, removeOp, updateOp } = useOps()
-  const { docs, updateDoc } = useDocs()
-  const { payments, updatePayment } = usePayments()
+  const { docs, updateDoc, addDoc } = useDocs()
+  const { payments, updatePayment, addPayment } = usePayments()
   const [draft, setDraft] = useState<Draft>(emptyDraft())
 
   // Удаление операции, связанной со счётом/платёжкой, должно снять у них статус «Оплачен»
@@ -94,6 +109,76 @@ export function Money() {
   }
   const pnlProfit = pnlInc - pnlExp
   const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
+
+  // Оценка НДС и УСН по месяцам — то, что просила бухгалтер: «загрузили выписку, сразу видно
+  // сколько НДС выделено и сколько УСН за месяц/квартал». Это ОЦЕНКА из операций (не официальный
+  // аванс — он на «Налогах», с учётом взносов и поквартальной логики).
+  const usnRate =
+    activeOrg.regionalRate != null
+      ? activeOrg.regionalRate
+      : activeOrg.usnObject === 'income_minus'
+        ? 15
+        : 6
+  const taxRows = Array.from({ length: 12 }, () => ({ inc: 0, exp: 0, vatOut: 0, vatIn: 0 }))
+  for (const o of yearOps) {
+    const m = Number(o.date.slice(5, 7)) - 1
+    if (m < 0 || m > 11) continue
+    const rate = o.vat && o.vat !== 'none' ? Number(o.vat) : 0
+    if (o.kind === 'income') {
+      if (o.taxable) taxRows[m].inc += o.amount
+      taxRows[m].vatOut += vatIncluded(o.amount, rate)
+    } else {
+      if (o.taxable) taxRows[m].exp += o.amount
+      taxRows[m].vatIn += vatIncluded(o.amount, rate)
+    }
+  }
+  const vatGeneral = activeOrg.vatMode === 'general' // вычет входного НДС только при общей ставке
+  /** УСН-оценка за месяц: Доходы — доход×ставка; Д−Р — прибыль×ставка, при убытке 0. */
+  const usnOf = (r: { inc: number; exp: number }) =>
+    activeOrg.usnObject === 'income_minus'
+      ? (Math.max(0, r.inc - r.exp) * usnRate) / 100
+      : (r.inc * usnRate) / 100
+  /** НДС к уплате за период: с реализации минус (для общей ставки) входной. */
+  const vatOf = (r: { vatOut: number; vatIn: number }) => r.vatOut - (vatGeneral ? r.vatIn : 0)
+  const taxYear = taxRows.reduce(
+    (a, r) => ({ inc: a.inc + r.inc, exp: a.exp + r.exp, vatOut: a.vatOut + r.vatOut, vatIn: a.vatIn + r.vatIn }),
+    { inc: 0, exp: 0, vatOut: 0, vatIn: 0 }
+  )
+  const hasTaxRows = taxRows.some((r) => r.inc || r.exp || r.vatOut || r.vatIn)
+
+  // Создать счёт/платёжку из текущей операции и перейти в соответствующий раздел.
+  const createDocFromDraft = (what: 'invoice' | 'payment') => {
+    if (what === 'invoice') {
+      const id = addDoc('invoice', 'outgoing')
+      updateDoc(id, {
+        buyer: draft.counterparty,
+        items: [newDocItem(draft.note || 'Товар / услуга', 1, draft.amount || 0)],
+        vatMode: (draft.vat && draft.vat !== 'none' ? draft.vat : 'none') as never,
+        note: draft.note,
+      })
+      navigate('/documents')
+    } else {
+      addPayment({
+        number: String(payments.reduce((m, p) => Math.max(m, Number(p.number) || 0), 0) + 1),
+        date: draft.date,
+        kind: 'contractor',
+        amount: draft.amount || 0,
+        payeeName: draft.counterparty,
+        payeeInn: '',
+        payeeKpp: '',
+        payeeAccount: '',
+        payeeBank: '',
+        payeeBik: '',
+        purpose: draft.note || `Оплата по счёту`,
+        vat: draft.vat || 'none',
+        taxable: draft.kind === 'expense' && draft.taxable,
+        planDate: '',
+        status: 'pending',
+        paidDate: '',
+      })
+      navigate('/payments')
+    }
+  }
 
   const exportPnl = () => {
     const rows = monthly
@@ -238,6 +323,28 @@ export function Money() {
           <p className="mt-1 text-sm text-muted">
             Доходы и расходы за {activeOrg.year} год. Формируют КУДиР и подставляются в расчёт налога.
           </p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="text-xs text-muted">Система:</span>
+            <div className="flex rounded-lg border border-line p-0.5">
+              {(
+                [
+                  ['income', 'Доходы 6%'],
+                  ['income_minus', 'Доходы−Расходы 15%'],
+                ] as const
+              ).map(([val, label]) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => updateActiveOrg({ usnObject: val })}
+                  className={`cursor-pointer rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                    activeOrg.usnObject === val ? 'bg-brand-600 text-white' : 'text-muted hover:text-ink'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <div className="flex gap-2">
           <input
@@ -380,6 +487,91 @@ export function Money() {
         )}
       </Card>
 
+      {/* Налоги по месяцам/кварталам — оценка из операций */}
+      <Card title="Налоги по месяцам (оценка)" className="mb-5">
+        <p className="mb-3 text-sm text-muted">
+          Сразу из операций: сколько НДС выделено и сколько УСН за каждый месяц и квартал. При убытке
+          (Доходы−Расходы) УСН = 0. Это ориентир; точный аванс с учётом взносов — на «Налогах».
+        </p>
+        {!hasTaxRows ? (
+          <p className="text-sm text-muted">Добавьте операции (можно загрузить выписку) — появится разбивка.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-3 font-medium">Период</th>
+                  <th className="py-2 pr-3 text-right font-medium">Доход</th>
+                  <th className="py-2 pr-3 text-right font-medium">Расход</th>
+                  {activeOrg.vat && <th className="py-2 pr-3 text-right font-medium">НДС</th>}
+                  <th className="py-2 text-right font-medium">УСН (оценка)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[0, 1, 2, 3].map((q) => {
+                  const monthsOfQ = [q * 3, q * 3 + 1, q * 3 + 2]
+                  const active = monthsOfQ.some((m) => {
+                    const r = taxRows[m]
+                    return r.inc || r.exp || r.vatOut || r.vatIn
+                  })
+                  if (!active) return null
+                  const qSum = monthsOfQ.reduce(
+                    (a, m) => {
+                      const r = taxRows[m]
+                      return { inc: a.inc + r.inc, exp: a.exp + r.exp, vatOut: a.vatOut + r.vatOut, vatIn: a.vatIn + r.vatIn }
+                    },
+                    { inc: 0, exp: 0, vatOut: 0, vatIn: 0 }
+                  )
+                  const usnQ = usnOf(qSum)
+                  const loss = activeOrg.usnObject === 'income_minus' && qSum.inc - qSum.exp <= 0
+                  return (
+                    <Fragment key={q}>
+                      {monthsOfQ.map((m) => {
+                        const r = taxRows[m]
+                        if (!(r.inc || r.exp || r.vatOut || r.vatIn)) return null
+                        return (
+                          <tr key={m} className="border-b border-line/60">
+                            <td className="py-1.5 pr-3 text-ink">{MONTHS[m]}</td>
+                            <td className="tnum py-1.5 pr-3 text-right text-ok">{formatRub(r.inc)}</td>
+                            <td className="tnum py-1.5 pr-3 text-right">{formatRub(r.exp)}</td>
+                            {activeOrg.vat && (
+                              <td className="tnum py-1.5 pr-3 text-right text-muted">{formatRub(vatOf(r))}</td>
+                            )}
+                            <td className="tnum py-1.5 text-right text-ink">{formatRub(usnOf(r))}</td>
+                          </tr>
+                        )
+                      })}
+                      <tr key={`q${q}`} className="border-b border-line bg-slate-50/60 font-medium dark:bg-slate-800/40">
+                        <td className="py-1.5 pr-3 text-muted">Итого {q + 1} квартал</td>
+                        <td className="tnum py-1.5 pr-3 text-right text-ok">{formatRub(qSum.inc)}</td>
+                        <td className="tnum py-1.5 pr-3 text-right">{formatRub(qSum.exp)}</td>
+                        {activeOrg.vat && (
+                          <td className="tnum py-1.5 pr-3 text-right text-muted">{formatRub(vatOf(qSum))}</td>
+                        )}
+                        <td className="tnum py-1.5 text-right text-ink">
+                          {loss ? <span className="text-ok">0 (убыток)</span> : formatRub(usnQ)}
+                        </td>
+                      </tr>
+                    </Fragment>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-line font-semibold text-ink">
+                  <td className="py-2 pr-3 text-right text-muted">За {activeOrg.year} год</td>
+                  <td className="tnum py-2 pr-3 text-right text-ok">{formatRub(taxYear.inc)}</td>
+                  <td className="tnum py-2 pr-3 text-right">{formatRub(taxYear.exp)}</td>
+                  {activeOrg.vat && (
+                    <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(vatOf(taxYear))}</td>
+                  )}
+                  <td className="tnum py-2 text-right">{formatRub(usnOf(taxYear))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </Card>
+
       {/* Добавить операцию */}
       <Card title="Добавить операцию" className="mb-5">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -441,6 +633,34 @@ export function Money() {
               value={draft.note}
               onChange={(e) => setDraft({ ...draft, note: e.target.value })}
             />
+          </Field>
+          <Field label="НДС" hint="в т.ч. — для оценки НДС">
+            <select
+              className={inputClass}
+              value={draft.vat || 'none'}
+              onChange={(e) => setDraft({ ...draft, vat: e.target.value })}
+            >
+              {VAT_OPTIONS.map(([v, label]) => (
+                <option key={v} value={v}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Создать документ" hint="из этих данных">
+            <select
+              className={inputClass}
+              value=""
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'invoice' || v === 'payment') createDocFromDraft(v)
+                e.target.value = ''
+              }}
+            >
+              <option value="">— не создавать —</option>
+              <option value="invoice">Счёт на оплату</option>
+              <option value="payment">Платёжное поручение</option>
+            </select>
           </Field>
           <label className="flex items-center gap-2.5 self-end pb-2.5">
             <input
@@ -728,6 +948,19 @@ export function Money() {
                   value={editDraft.note}
                   onChange={(e) => setEditDraft({ ...editDraft, note: e.target.value })}
                 />
+              </Field>
+              <Field label="НДС">
+                <select
+                  className={inputClass}
+                  value={editDraft.vat || 'none'}
+                  onChange={(e) => setEditDraft({ ...editDraft, vat: e.target.value })}
+                >
+                  {VAT_OPTIONS.map(([v, label]) => (
+                    <option key={v} value={v}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
               </Field>
             </div>
             <label className="mt-3 flex items-center gap-2.5">

@@ -3,14 +3,54 @@ import { useOrg } from './orgStore'
 import { persistKey } from '../lib/storage/idb'
 import { logChange, diffFields } from '../lib/storage/storeAdmin'
 
-/** Вид платёжки: оплата контрагенту / пополнение ЕНС / перевод между своими счетами. */
-export type PaymentKind = 'contractor' | 'ens' | 'transfer'
+/**
+ * Тип операции платёжки (как в Эльбе — список при создании списания).
+ * От типа зависят: нужен ли получатель-контрагент, учитывается ли в УСН расход,
+ * бюджетные ли реквизиты (ЕНС/травматизм) и текст назначения по умолчанию.
+ */
+export type PaymentKind =
+  | 'contractor' // Оплата поставщику / контрагенту
+  | 'supplier_advance' // Аванс поставщику
+  | 'customer_refund' // Возврат покупателю
+  | 'salary' // Выплата зарплаты
+  | 'ens' // Налоги и взносы (ЕНС)
+  | 'injury' // Взносы на травматизм (СФР)
+  | 'transfer' // Перевод между своими счетами
+  | 'accountable' // Выдача под отчёт
+  | 'personal' // Личные нужды ИП (вывод на личный счёт)
+  | 'loan_interest' // Проценты по кредиту
+  | 'loan_repay' // Возврат кредита / займа
+  | 'other' // Прочее списание
 
-export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = {
-  contractor: 'Оплата контрагенту',
-  ens: 'Пополнение ЕНС (налоги и взносы)',
-  transfer: 'Перевод между счетами',
+interface PaymentKindMeta {
+  label: string
+  group: 'Расходы' | 'Налоги и взносы' | 'Прочее'
+  /** Нужен ли контрагент-получатель (иначе получатель подставляется/необязателен). */
+  needsPayee: boolean
+  /** По умолчанию учитывать в расходах УСН (Доходы−Расходы). */
+  taxableDefault: boolean
 }
+
+/** Справочник типов операций платёжки. Порядок = порядок в выпадающем списке. */
+export const PAYMENT_KINDS: Record<PaymentKind, PaymentKindMeta> = {
+  contractor: { label: 'Оплата поставщику / контрагенту', group: 'Расходы', needsPayee: true, taxableDefault: true },
+  supplier_advance: { label: 'Аванс поставщику', group: 'Расходы', needsPayee: true, taxableDefault: false },
+  customer_refund: { label: 'Возврат покупателю', group: 'Расходы', needsPayee: true, taxableDefault: false },
+  salary: { label: 'Выплата зарплаты', group: 'Расходы', needsPayee: false, taxableDefault: true },
+  accountable: { label: 'Выдача под отчёт', group: 'Расходы', needsPayee: false, taxableDefault: false },
+  ens: { label: 'Налоги и взносы (ЕНС)', group: 'Налоги и взносы', needsPayee: false, taxableDefault: false },
+  injury: { label: 'Взносы на травматизм (СФР)', group: 'Налоги и взносы', needsPayee: false, taxableDefault: false },
+  transfer: { label: 'Перевод между своими счетами', group: 'Прочее', needsPayee: false, taxableDefault: false },
+  personal: { label: 'Личные нужды ИП', group: 'Прочее', needsPayee: false, taxableDefault: false },
+  loan_interest: { label: 'Проценты по кредиту', group: 'Прочее', needsPayee: true, taxableDefault: false },
+  loan_repay: { label: 'Возврат кредита / займа', group: 'Прочее', needsPayee: true, taxableDefault: false },
+  other: { label: 'Прочее списание', group: 'Прочее', needsPayee: false, taxableDefault: false },
+}
+
+/** Совместимость: словарь подписей (использовался до справочника PAYMENT_KINDS). */
+export const PAYMENT_KIND_LABEL: Record<PaymentKind, string> = Object.fromEntries(
+  Object.entries(PAYMENT_KINDS).map(([k, v]) => [k, v.label])
+) as Record<PaymentKind, string>
 
 /** Платёжное поручение (форма 0401060). Хранится локально по организации. */
 export interface Payment {
@@ -27,6 +67,9 @@ export interface Payment {
   payeeBank: string
   payeeBik: string
   purpose: string // назначение платежа
+  vat?: string // ставка НДС в платеже: 'none' | '5' | '7' | '10' | '20' | '22'
+  taxable?: boolean // учитывать в расходах УСН (после оплаты)
+  planDate?: string // когда заплатить (план), YYYY-MM-DD
   status: 'pending' | 'paid'
   paidDate: string // когда оплачено (YYYY-MM-DD) или ''
   linkedOpId?: string // id операции-расхода в «Деньгах» после оплаты

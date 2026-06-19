@@ -18,6 +18,11 @@ const dec = (d: { toNumber: () => number } | null | undefined) =>
 
 const kindIcon = { payment: IconClock, notification: IconSend, report: IconCheck } as const
 
+const MONTHS_RU = [
+  'январь', 'февраль', 'март', 'апрель', 'май', 'июнь',
+  'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь',
+]
+
 function startOfTodayMs(): number {
   const n = new Date()
   return Date.UTC(n.getFullYear(), n.getMonth(), n.getDate())
@@ -206,7 +211,7 @@ export function Dashboard() {
 
       {salaryRows.length > 0 && (
         <div className="mb-6">
-          <Card title="Зарплата сотрудникам">
+          <Card title={`Зарплата сотрудникам — ${MONTHS_RU[new Date().getMonth()]}`}>
             <p className="mb-2 text-xs text-muted">
               Даты выдачи аванса и зарплаты по сотрудникам. НДФЛ удерживается при каждой выплате.
             </p>
@@ -234,6 +239,17 @@ export function Dashboard() {
                   </span>
                 </div>
               ))}
+            </div>
+            <div className="mt-3 rounded-lg border border-line bg-slate-50/60 px-3 py-2 text-xs text-muted dark:bg-slate-800/40">
+              <div className="mb-1 font-medium text-ink">Сроки по зарплате (ежемесячно):</div>
+              <ul className="space-y-0.5">
+                <li>НДФЛ за период 1–22 — уплатить до 28 числа этого месяца, уведомление до 25.</li>
+                <li>НДФЛ за период 23–конец — уплатить до 5 числа следующего месяца.</li>
+                <li>Страховые взносы за работников — до 28 числа следующего месяца.</li>
+                <li>Взносы на травматизм (СФР) — до 15 числа следующего месяца.</li>
+                <li>Персонифицированные сведения — до 25 числа следующего месяца.</li>
+              </ul>
+              <div className="mt-1.5">Полный список с датами — в задачах ниже и в разделе «Полезные документы».</div>
             </div>
           </Card>
         </div>

@@ -435,6 +435,21 @@ function StaffRoster({ year }: { year: number }) {
                   <Row label="= На руки" value={dec(m.net)} strong />
                 </>
               )}
+              {selected.alimonyEnabled &&
+                (() => {
+                  const a = employeeAlimony(selected, year)
+                  if (!a) return null
+                  return (
+                    <div className="mt-3 border-t border-line pt-2">
+                      <Row label="− Алименты" hint={a.label} value={formatRub(a.alimony)} />
+                      <Row
+                        label="= К выплате после алиментов"
+                        value={formatRub(Math.max(0, m.net.toNumber() - a.alimony))}
+                        strong
+                      />
+                    </div>
+                  )
+                })()}
               <div className="mt-3 border-t border-line pt-2">
                 <Row label="Взносы с ФОТ" hint={selected.msp ? 'льгота МСП' : 'единый тариф'} value={dec(m.vznosy)} />
                 <Row label="Травматизм" hint="0,2%" value={dec(m.travmatizm)} />
@@ -523,6 +538,33 @@ function SalaryCalc({ year }: { year: number }) {
   const hasAdvance = advancePercent > 0
   const normSel = norm(selMonth)
   const partial = worked[selMonth] !== normSel
+
+  // Начисления ПО ФАКТУ: месяц появляется в «Зарплата по месяцам» только после «Начислить».
+  // Так бухгалтер не получает 12 месяцев вперёд с одинаковым окладом.
+  const selEmp = employees.find((x) => x.id === selId) ?? null
+  const accruedArr = (selEmp?.accruedMonths?.[year] ?? []).slice()
+  while (accruedArr.length < 12) accruedArr.push(false)
+  const isAccrued = (mi: number) => !!accruedArr[mi]
+  const anyAccrued = accruedArr.some(Boolean)
+  const accIdx = Array.from({ length: 12 }, (_, i) => i).filter(isAccrued)
+  const setAccrued = (mi: number, val: boolean) => {
+    if (!selEmp) return
+    const next = accruedArr.slice()
+    next[mi] = val
+    updateEmployee(selEmp.id, { accruedMonths: { ...(selEmp.accruedMonths ?? {}), [year]: next } })
+  }
+  const accTot = accIdx.reduce(
+    (a, i) => {
+      const mm = r!.months[i]
+      return {
+        gross: a.gross + mm.gross.toNumber(),
+        ndfl: a.ndfl + mm.ndfl.toNumber(),
+        net: a.net + mm.net.toNumber(),
+        vz: a.vz + mm.vznosy.plus(mm.travmatizm).toNumber(),
+      }
+    },
+    { gross: 0, ndfl: 0, net: 0, vz: 0 }
+  )
 
   return (
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
@@ -639,62 +681,118 @@ function SalaryCalc({ year }: { year: number }) {
             )}
           </Card>
 
-          {/* История по месяцам */}
-          <Card title="Зарплата по месяцам">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
-                    <th className="py-2 pr-3 font-medium">Месяц</th>
-                    <th className="py-2 pr-3 text-right font-medium">Дней</th>
-                    <th className="py-2 pr-3 text-right font-medium">Начислено</th>
-                    <th className="py-2 pr-3 text-right font-medium">Удержано</th>
-                    <th className="py-2 pr-3 text-right font-medium">Выдано</th>
-                    <th className="py-2 text-right font-medium">Взносы</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.months.map((mm, i) => (
-                    <tr
-                      key={i}
-                      onClick={() => setSelMonth(i)}
-                      className={`cursor-pointer border-b border-line/60 transition-colors hover:bg-slate-50 ${
-                        i === selMonth ? 'bg-brand-50' : ''
-                      }`}
-                    >
-                      <td className="py-2 pr-3 text-ink">
-                        {MONTH_NAMES[i]} {year}
-                      </td>
-                      <td className="tnum py-2 pr-3 text-right text-muted">
-                        {worked[i]}/{norm(i)}
-                      </td>
-                      <td className="tnum py-2 pr-3 text-right text-ink">{dec(mm.gross)}</td>
-                      <td className="tnum py-2 pr-3 text-right text-muted">{dec(mm.ndfl)}</td>
-                      <td className="tnum py-2 pr-3 text-right font-medium text-ink">{dec(mm.net)}</td>
-                      <td className="tnum py-2 text-right text-muted">
-                        {dec(mm.vznosy.plus(mm.travmatizm))}
-                      </td>
+          {/* Начисления ПО ФАКТУ — месяц появляется только после «Начислить» */}
+          <Card
+            title="Зарплата по месяцам"
+            right={
+              selId ? (
+                isAccrued(selMonth) ? (
+                  <button
+                    type="button"
+                    onClick={() => setAccrued(selMonth, false)}
+                    className="cursor-pointer rounded-lg border border-line px-3 py-1.5 text-sm font-medium text-slate-500 transition-colors hover:border-danger hover:text-danger"
+                  >
+                    Убрать начисление за {MONTH_NAMES[selMonth]}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAccrued(selMonth, true)}
+                    className="cursor-pointer rounded-lg bg-brand-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+                  >
+                    Начислить за {MONTH_NAMES[selMonth]}
+                  </button>
+                )
+              ) : null
+            }
+          >
+            {!selId ? (
+              <Note>
+                Выберите сотрудника, чтобы вести начисления по месяцам по факту. В ручном режиме
+                показывается только выбранный месяц (карточка выше).
+              </Note>
+            ) : !anyAccrued ? (
+              <Note>
+                Ещё нет начислений. Выберите месяц в карточке выше и нажмите «Начислить за …» — он
+                появится здесь. Месяцы вперёд не заполняются.
+              </Note>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-muted">
+                      <th className="py-2 pr-3 font-medium">Месяц</th>
+                      <th className="py-2 pr-3 text-right font-medium">Дней</th>
+                      <th className="py-2 pr-3 text-right font-medium">Начислено</th>
+                      <th className="py-2 pr-3 text-right font-medium">Удержано</th>
+                      <th className="py-2 pr-3 text-right font-medium">Выдано</th>
+                      <th className="py-2 pr-3 text-right font-medium">Взносы</th>
+                      <th className="py-2"></th>
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-line font-medium text-ink">
-                    <td className="py-2 pr-3 text-right text-muted" colSpan={2}>
-                      За год
-                    </td>
-                    <td className="tnum py-2 pr-3 text-right">{dec(r.gross_year)}</td>
-                    <td className="tnum py-2 pr-3 text-right text-muted">{dec(r.ndfl_year)}</td>
-                    <td className="tnum py-2 pr-3 text-right">{dec(r.net_year)}</td>
-                    <td className="tnum py-2 text-right text-muted">
-                      {dec(r.vznosy_year.plus(r.travmatizm_year))}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {accIdx.map((i) => {
+                      const mm = r.months[i]
+                      return (
+                        <tr
+                          key={i}
+                          onClick={() => setSelMonth(i)}
+                          className={`cursor-pointer border-b border-line/60 transition-colors hover:bg-slate-50 ${
+                            i === selMonth ? 'bg-brand-50' : ''
+                          }`}
+                        >
+                          <td className="py-2 pr-3 text-ink">
+                            {MONTH_NAMES[i]} {year}
+                          </td>
+                          <td className="tnum py-2 pr-3 text-right text-muted">
+                            {worked[i]}/{norm(i)}
+                          </td>
+                          <td className="tnum py-2 pr-3 text-right text-ink">{dec(mm.gross)}</td>
+                          <td className="tnum py-2 pr-3 text-right text-muted">{dec(mm.ndfl)}</td>
+                          <td className="tnum py-2 pr-3 text-right font-medium text-ink">{dec(mm.net)}</td>
+                          <td className="tnum py-2 pr-3 text-right text-muted">
+                            {dec(mm.vznosy.plus(mm.travmatizm))}
+                          </td>
+                          <td className="py-2 text-right">
+                            <button
+                              type="button"
+                              onClick={(ev) => {
+                                ev.stopPropagation()
+                                setAccrued(i, false)
+                              }}
+                              className="cursor-pointer text-xs text-slate-400 transition-colors hover:text-danger"
+                            >
+                              убрать
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-line font-medium text-ink">
+                      <td className="py-2 pr-3 text-right text-muted" colSpan={2}>
+                        Начислено за {accIdx.length} мес.
+                      </td>
+                      <td className="tnum py-2 pr-3 text-right">{formatRub(accTot.gross)}</td>
+                      <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(accTot.ndfl)}</td>
+                      <td className="tnum py-2 pr-3 text-right">{formatRub(accTot.net)}</td>
+                      <td className="tnum py-2 pr-3 text-right text-muted">{formatRub(accTot.vz)}</td>
+                      <td className="py-2"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+            <p className="mt-3 text-xs text-muted">
+              Больничный или отпуск без оплаты в месяце — уменьшите «Отработано» в карточке месяца,
+              начисление пересчитается. Выплату зарплаты оформляйте в «Платёжках» (тип «Выплата
+              зарплаты»).
+            </p>
           </Card>
 
-          <Card title="Взносы и стоимость за год">
+          <Card title="Взносы и стоимость (проекция на год)">
+            <p className="mb-2 text-xs text-muted">Если сотрудник работает все 12 месяцев на текущих условиях.</p>
             <Row label="Доход (гросс) за год" value={dec(r.gross_year)} />
             <Row label="НДФЛ за год" value={dec(r.ndfl_year)} />
             <Row label="Взносы за год" value={dec(r.vznosy_year.plus(r.travmatizm_year))} />
@@ -921,7 +1019,27 @@ function SickCalc({ year }: { year: number }) {
               <Field label="Болел с"><input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} /></Field>
               <Field label="по"><input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} /></Field>
             </div>
-            <div className="text-xs text-muted">Дней болезни: <b>{days || '—'}</b></div>
+            {days > 0 ? (
+              <div className="rounded-lg border border-line bg-slate-50/60 px-3 py-2 text-xs text-muted dark:bg-slate-800/40">
+                Период: <b className="text-ink">{formatDate(from)} — {formatDate(to)}</b> · {days}{' '}
+                {days === 1 ? 'день' : 'дн.'} (первые 3 — за счёт работодателя, остальные — СФР).
+                {(() => {
+                  const set = new Set<number>()
+                  for (let i = 0; i < days; i++) {
+                    const dt = new Date(Number(from.slice(0, 4)), Number(from.slice(5, 7)) - 1, Number(from.slice(8, 10)) + i)
+                    set.add(dt.getMonth())
+                  }
+                  return set.size > 1 ? (
+                    <span className="mt-1 block text-warn">
+                      Захватывает месяцы: {[...set].map((mi) => MONTH_NAMES[mi]).join(', ')} — пособие за
+                      каждый день считается по длине своего месяца.
+                    </span>
+                  ) : null
+                })()}
+              </div>
+            ) : (
+              <div className="text-xs text-muted">Укажите период болезни (с — по).</div>
+            )}
             {emp && (
               <button
                 type="button"
@@ -988,52 +1106,124 @@ function SickCalc({ year }: { year: number }) {
   )
 }
 
-// ---- Алименты ----
-function AlimonyCalc() {
-  const { employees } = useEmployees()
-  const [selId, setSelId] = useState('')
-  const [gross, setGross] = useState(80_000)
-  const [children, setChildren] = useState(1)
-
-  const pick = (e: Employee | null) => {
-    setSelId(e?.id ?? '')
-    if (e) setGross(e.salary)
-  }
-
-  const ndfl = Math.round(gross * 0.13)
-  let r: ReturnType<typeof calcAlimony> | null = null
+// ---- Алименты (галочка на сотруднике → авто-расчёт) ----
+/** Алименты сотрудника за месяц: доля от (оклад−НДФЛ) или твёрдая сумма, лимит 70%. */
+export function employeeAlimony(e: Employee, year: number): { alimony: number; label: string; capped: boolean; base: number; ndfl: number } | null {
+  if (!e.alimonyEnabled) return null
+  const gross = e.salary
+  let ndfl = Math.round(gross * 0.13)
   try {
-    r = calcAlimony(gross, ndfl, children)
+    const r = calcSalary(year, gross, employeeSalaryOptions(e, year))
+    ndfl = r.months[0]?.ndfl.toNumber() ?? ndfl
   } catch {
-    r = null
+    /* fallback 13% */
   }
+  const base = Math.max(0, gross - ndfl)
+  if ((e.alimonyMode ?? 'share') === 'fixed') {
+    const cap = base * 0.7
+    const fixed = e.alimonyFixed ?? 0
+    return { alimony: Math.min(fixed, cap), label: `${formatRub(fixed)} (тверд.)`, capped: fixed > cap, base, ndfl }
+  }
+  const r = calcAlimony(gross, ndfl, e.alimonyChildren ?? 1)
+  return { alimony: r.alimony.toNumber(), label: r.share_label, capped: r.capped, base, ndfl }
+}
+
+function AlimonyCalc({ year }: { year: number }) {
+  const { employees, updateEmployee } = useEmployees()
+  const [selId, setSelId] = useState('')
+  const emp = employees.find((e) => e.id === selId) ?? null
+  const up = (patch: Partial<Employee>) => emp && updateEmployee(emp.id, patch)
+
+  const enabled = !!emp?.alimonyEnabled
+  const mode = emp?.alimonyMode ?? 'share'
+  const res = emp ? employeeAlimony(emp, year) : null
+
   return (
     <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
-      <Card title="Параметры">
+      <Card title="Удержание алиментов">
         <div className="space-y-4">
-          <EmployeePicker employees={employees} value={selId} onPick={pick} />
-          <Field label="Доход в месяц (гросс)" hint={formatRub(gross)}>{numInput(gross, setGross)}</Field>
-          <Field label="Детей на алименты">{numInput(children, setChildren, { max: 3 })}</Field>
-          <p className="text-xs text-muted">НДФЛ учтён упрощённо 13% = {formatRub(ndfl)}</p>
+          <EmployeePicker employees={employees} value={selId} onPick={(e) => setSelId(e?.id ?? '')} />
+          {emp ? (
+            <>
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-line text-brand-600"
+                  checked={enabled}
+                  onChange={(e) => up({ alimonyEnabled: e.target.checked })}
+                />
+                <span className="text-sm text-ink">
+                  Удерживать алименты <span className="text-muted">(исполнительный лист / соглашение)</span>
+                </span>
+              </label>
+              {enabled && (
+                <>
+                  <Field label="Способ удержания">
+                    <select
+                      className={inputClass}
+                      value={mode}
+                      onChange={(e) => up({ alimonyMode: e.target.value as 'share' | 'fixed' })}
+                    >
+                      <option value="share">Доля от дохода (по числу детей)</option>
+                      <option value="fixed">Твёрдая сумма в месяц</option>
+                    </select>
+                  </Field>
+                  {mode === 'share' ? (
+                    <Field label="Детей на алименты" hint="1 → 1/4, 2 → 1/3, 3+ → 1/2 (ст. 81 СК РФ)">
+                      <select
+                        className={inputClass}
+                        value={emp.alimonyChildren ?? 1}
+                        onChange={(e) => up({ alimonyChildren: Number(e.target.value) })}
+                      >
+                        <option value={1}>1 ребёнок — 1/4</option>
+                        <option value={2}>2 детей — 1/3</option>
+                        <option value={3}>3 и более — 1/2</option>
+                      </select>
+                    </Field>
+                  ) : (
+                    <Field label="Сумма в месяц, ₽">
+                      {numInput(emp.alimonyFixed ?? 0, (n) => up({ alimonyFixed: n }))}
+                    </Field>
+                  )}
+                  <Note>
+                    Алименты считаются автоматически от оклада сотрудника за вычетом НДФЛ и удерживаются
+                    из каждой выплаты (аванс + расчёт). Менять оклад/детей вручную здесь не нужно — всё
+                    берётся из карточки.
+                  </Note>
+                </>
+              )}
+            </>
+          ) : (
+            <Note>Выберите сотрудника. Удержание включается галочкой — дальше всё считается само.</Note>
+          )}
         </div>
       </Card>
-      {r && (
+      {emp && enabled && res ? (
         <div className="space-y-5">
           <Card>
             <div className="text-sm text-muted">Алименты в месяц</div>
-            <div className="tnum mt-1 text-3xl font-semibold text-ink">{dec(r.alimony)}</div>
+            <div className="tnum mt-1 text-3xl font-semibold text-ink">{formatRub(res.alimony)}</div>
           </Card>
           <Card title="Как посчитано">
-            <Row label="Доход после НДФЛ" hint="база удержания" value={dec(r.base_after_ndfl)} />
-            <Row label="Доля" hint="ст. 81 СК РФ" value={r.share_label} />
-            <Row label="Алименты" value={dec(r.alimony)} strong />
+            <Row label="Оклад (гросс)" value={formatRub(emp.salary)} />
+            <Row label="− НДФЛ" hint="из расчёта зарплаты" value={formatRub(res.ndfl)} />
+            <Row label="= База удержания" value={formatRub(res.base)} strong />
+            <Row label={mode === 'share' ? 'Доля' : 'Твёрдая сумма'} hint={mode === 'share' ? 'ст. 81 СК РФ' : undefined} value={res.label} />
+            <Row label="Алименты к удержанию" value={formatRub(res.alimony)} strong />
           </Card>
-          {r.notes.map((n, i) => (
-            <Note key={i} tone="warn">{n}</Note>
-          ))}
-          <Note>Максимум удержания на детей — 70% от дохода после НДФЛ (ст. 99 ФЗ № 229-ФЗ).</Note>
+          {res.capped && (
+            <Note tone="warn">Применён максимум удержания 70% от дохода после НДФЛ (ст. 99 ФЗ № 229-ФЗ).</Note>
+          )}
+          <Note>
+            С 1 марта 2026 минимальный размер алиментов привязан к среднемесячной зарплате в регионе
+            (ФЗ № 432-ФЗ) — если доля ниже минимума, пристав может назначить твёрдую сумму.
+          </Note>
         </div>
-      )}
+      ) : emp && !enabled ? (
+        <Card>
+          <Note>Алименты не удерживаются. Поставьте галочку слева, если есть исполнительный лист.</Note>
+        </Card>
+      ) : null}
     </div>
   )
 }
@@ -1240,7 +1430,7 @@ export function Employees() {
       {tab === 'salary' && <SalaryCalc year={activeOrg.year} />}
       {tab === 'vacation' && <VacationCalc year={activeOrg.year} />}
       {tab === 'sick' && <SickCalc year={activeOrg.year} />}
-      {tab === 'alimony' && <AlimonyCalc />}
+      {tab === 'alimony' && <AlimonyCalc year={activeOrg.year} />}
       {tab === 'summary' && <StaffSummary org={activeOrg} />}
       {tab === 'reports' && <ReportsTab org={activeOrg} />}
     </div>
