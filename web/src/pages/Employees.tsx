@@ -6,7 +6,7 @@ import {
   type VacationType,
   type VacationEvent,
 } from '../state/employeesStore'
-import { periodDays, accruedVacationDays, sickDayFloors } from '../lib/vacation'
+import { periodDays, accruedVacationDays, sickDayFloors, workdaysOfPeriodsInMonth } from '../lib/vacation'
 import { VacationOrderDoc, VacationScheduleDoc } from '../components/employee/EmployeeDocs'
 import { calcAlimony, calcSalary, calcSickLeave, calcVacation, workdaysInMonth } from '../lib/taxcore'
 import { formatRub, formatDate } from '../lib/format'
@@ -527,7 +527,18 @@ function SalaryCalc({ year }: { year: number }) {
     })
   }
 
-  const factors = worked.map((d, i) => (norm(i) ? d / norm(i) : 1))
+  // Авто-учёт больничных и отпусков без оплаты: при включении рабочие дни месяца
+  // уменьшаются на рабочие дни отсутствия автоматически («и так, и так» — иначе вручную).
+  const selEmpSV = employees.find((x) => x.id === selId) ?? null
+  const autoSV = !!selEmpSV?.autoSickVacation
+  const sickPeriods = selEmpSV?.sickLeaves ?? []
+  const unpaidVacPeriods = (selEmpSV?.vacations ?? []).filter((v) => v.type === 'unpaid')
+  const absenceWd = (mi: number) =>
+    autoSV
+      ? workdaysOfPeriodsInMonth(sickPeriods, year, mi) + workdaysOfPeriodsInMonth(unpaidVacPeriods, year, mi)
+      : 0
+  const effWorked = worked.map((w, i) => (autoSV ? Math.max(0, norm(i) - absenceWd(i)) : w))
+  const factors = effWorked.map((d, i) => (norm(i) ? d / norm(i) : 1))
   let r: ReturnType<typeof calcSalary> | null = null
   try {
     r = calcSalary(year, gross, { children, msp, advancePercent: advancePercent / 100, monthFactors: factors })
@@ -537,7 +548,8 @@ function SalaryCalc({ year }: { year: number }) {
   const m = r?.months[selMonth]
   const hasAdvance = advancePercent > 0
   const normSel = norm(selMonth)
-  const partial = worked[selMonth] !== normSel
+  const workedSel = effWorked[selMonth]
+  const partial = workedSel !== normSel
 
   // Начисления ПО ФАКТУ: месяц появляется в «Зарплата по месяцам» только после «Начислить».
   // Так бухгалтер не получает 12 месяцев вперёд с одинаковым окладом.
@@ -594,6 +606,22 @@ function SalaryCalc({ year }: { year: number }) {
           </Field>
           <Field label="Детей (для вычета)">{numInput(children, setChildren, { max: 10 })}</Field>
           <Field label="Аванс, %" hint="0 = без разбивки">{numInput(advancePercent, (n) => setAdvancePercent(Math.min(100, n)), { max: 100 })}</Field>
+          {selId && (
+            <label className="flex cursor-pointer items-start gap-2.5">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600"
+                checked={autoSV}
+                onChange={(e) => updateEmployee(selId, { autoSickVacation: e.target.checked })}
+              />
+              <span className="text-sm text-ink">
+                Авто-учёт больничных и отпусков без оплаты
+                <span className="block text-xs text-muted">
+                  рабочие дни месяца сами уменьшатся на дни отсутствия; выключено — вводите «Отработано» вручную
+                </span>
+              </span>
+            </label>
+          )}
           <label
             className="flex cursor-pointer items-center gap-2.5"
             title="Пониженный тариф 15% на выплаты сверх 1,5 МРОТ. С 2026 (ФЗ № 425-ФЗ) — только для субъектов МСП с основным ОКВЭД из перечня приоритетных отраслей; проверьте применимость."
@@ -648,12 +676,19 @@ function SalaryCalc({ year }: { year: number }) {
                 type="number"
                 min={0}
                 max={normSel}
-                value={worked[selMonth]}
+                value={workedSel}
+                disabled={autoSV}
                 onChange={(e) => setWorkedMonth(selMonth, Number(e.target.value))}
-                className="w-16 rounded-lg border border-line px-2 py-1 text-center text-sm text-ink"
+                title={autoSV ? 'Считается авто из больничных/отпусков. Выключите авто-учёт в «Параметрах», чтобы ввести вручную.' : undefined}
+                className="w-16 rounded-lg border border-line px-2 py-1 text-center text-sm text-ink disabled:bg-slate-100 disabled:text-muted"
               />
               <span className="text-muted">из {normSel} рабочих дней</span>
-              {partial && (
+              {autoSV && absenceWd(selMonth) > 0 && (
+                <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-warn">
+                  −{absenceWd(selMonth)} дн. (больничный / отпуск без оплаты, авто)
+                </span>
+              )}
+              {partial && !autoSV && (
                 <span className="rounded bg-amber-50 px-1.5 py-0.5 text-xs text-warn">
                   неполный месяц — оклад пропорционально
                 </span>
@@ -764,7 +799,7 @@ function SalaryCalc({ year }: { year: number }) {
                             {MONTH_NAMES[i]} {year}
                           </td>
                           <td className="tnum py-2 pr-3 text-right text-muted">
-                            {worked[i]}/{norm(i)}
+                            {effWorked[i]}/{norm(i)}
                           </td>
                           <td className="tnum py-2 pr-3 text-right text-ink">{dec(mm.gross)}</td>
                           <td className="tnum py-2 pr-3 text-right text-muted">{dec(mm.ndfl)}</td>

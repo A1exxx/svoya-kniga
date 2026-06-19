@@ -44,7 +44,7 @@ export const NAV = [
 ] as const
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
-  const { orgs, activeOrgId, setActiveOrgId, addOrg } = useOrg()
+  const { orgs, activeOrgId, setActiveOrgId, addOrg, removeOrg } = useOrg()
   const navigate = useNavigate()
 
   // Добавить ИП и СРАЗУ открыть Реквизиты — куда вносить данные (иначе непонятно, что дальше).
@@ -97,33 +97,55 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             const active = o.id === activeOrgId
             const complete = requisitesComplete(o)
             return (
-              <button
+              <div
                 key={o.id}
-                type="button"
-                onClick={() => {
-                  setActiveOrgId(o.id)
-                  onNavigate?.()
-                }}
-                title={complete ? 'Реквизиты заполнены' : 'Реквизиты заполнены не полностью'}
-                className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
-                  active
-                    ? 'bg-brand-50 text-brand-600'
-                    : 'text-slate-600 hover:bg-slate-50 hover:text-ink'
+                className={`group flex items-center gap-1 rounded-lg pr-1 transition-colors ${
+                  active ? 'bg-brand-50' : 'hover:bg-slate-50'
                 }`}
               >
-                <span className="min-w-0 flex-1">
-                  <span className={`block truncate text-sm ${active ? 'font-medium' : ''}`}>
-                    {orgDisplayName(o)}
-                  </span>
-                  {o.inn && <span className="block truncate text-[11px] text-muted">ИНН {o.inn}</span>}
-                </span>
-                <span
-                  className={`shrink-0 text-xs ${complete ? 'text-ok' : 'text-slate-300'}`}
-                  aria-hidden
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveOrgId(o.id)
+                    onNavigate?.()
+                  }}
+                  title={complete ? 'Реквизиты заполнены' : 'Реквизиты заполнены не полностью'}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                    active ? 'text-brand-600' : 'text-slate-600 hover:text-ink'
+                  }`}
                 >
-                  {complete ? '✓' : '•'}
-                </span>
-              </button>
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-sm ${active ? 'font-medium' : ''}`}>
+                      {orgDisplayName(o)}
+                    </span>
+                    {o.inn && <span className="block truncate text-[11px] text-muted">ИНН {o.inn}</span>}
+                  </span>
+                  <span
+                    className={`shrink-0 text-xs ${complete ? 'text-ok' : 'text-slate-300'}`}
+                    aria-hidden
+                  >
+                    {complete ? '✓' : '•'}
+                  </span>
+                </button>
+                {orgs.length > 1 && (
+                  <button
+                    type="button"
+                    aria-label={`Удалить ${orgDisplayName(o)}`}
+                    title="Удалить ИП"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `Удалить ИП «${orgDisplayName(o)}»? Его реквизиты, операции, документы и сотрудники станут недоступны. Действие можно откатить из «Администрирования» (снимок).`
+                        )
+                      )
+                        removeOrg(o.id)
+                    }}
+                    className="shrink-0 rounded-md px-1.5 py-1 text-xs text-slate-300 opacity-0 transition-colors hover:bg-red-50 hover:text-danger group-hover:opacity-100"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             )
           })}
         </div>

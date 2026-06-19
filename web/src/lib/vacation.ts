@@ -3,6 +3,38 @@
  * Отпускные считаются в taxcore (calcVacation); здесь — даты и накопление.
  */
 
+import { HOLIDAYS_BY_YEAR } from './taxcore'
+
+/** Рабочий ли день (не выходной и не праздник из производственного календаря). */
+function isWorkdayLocal(d: Date, holidays: Set<string>): boolean {
+  const dow = d.getDay()
+  if (dow === 0 || dow === 6) return false
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return !holidays.has(iso)
+}
+
+/**
+ * Сколько РАБОЧИХ дней периодов [from,to] попадает в месяц month0 (0..11) года year.
+ * Для авто-учёта больничных / отпусков без оплаты в зарплате месяца (уменьшают отработанные дни).
+ */
+export function workdaysOfPeriodsInMonth(
+  periods: { from: string; to: string }[],
+  year: number,
+  month0: number
+): number {
+  const holidays = new Set(HOLIDAYS_BY_YEAR[year] ?? [])
+  let count = 0
+  for (const p of periods) {
+    const a = new Date(p.from + 'T00:00:00')
+    const b = new Date(p.to + 'T00:00:00')
+    if (isNaN(a.getTime()) || isNaN(b.getTime()) || b < a) continue
+    for (const d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+      if (d.getFullYear() === year && d.getMonth() === month0 && isWorkdayLocal(d, holidays)) count++
+    }
+  }
+  return count
+}
+
 /** Календарных дней в периоде [from, to] включительно (0 при некорректном). */
 export function periodDays(from: string, to: string): number {
   const a = Date.parse(from)

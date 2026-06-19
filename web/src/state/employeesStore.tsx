@@ -61,6 +61,11 @@ export interface Employee {
   accruedMonths?: Record<number, boolean[]>
   /** Выдача зарплаты по факту: 12 флагов на год — выплачена ли зарплата за месяц. */
   paidMonths?: Record<number, boolean[]>
+  /**
+   * Авто-учёт больничных и отпусков без оплаты в зарплате: при true рабочие дни месяца
+   * уменьшаются на дни больничных/неоплачиваемых отпусков автоматически; при false — вручную.
+   */
+  autoSickVacation?: boolean
   /** Алименты: удерживать по исполнительному листу / соглашению */
   alimonyEnabled?: boolean
   /** Способ: доля от дохода (по числу детей) или твёрдая сумма */
@@ -106,6 +111,7 @@ const EMP_DEFAULTS: Omit<Employee, 'id'> = {
   sickLeaves: [],
   accruedMonths: {},
   paidMonths: {},
+  autoSickVacation: false,
   alimonyEnabled: false,
   alimonyMode: 'share',
   alimonyChildren: 1,
