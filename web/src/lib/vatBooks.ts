@@ -7,8 +7,10 @@ import { docTotals, DOC_TYPE_LABEL, type Doc } from '../state/docsStore'
 export interface VatBookLine {
   num: number
   doc: string // «Счёт № 5»
+  docNumber: string // только номер счёта-фактуры (строка 020 раздела 9)
   date: string // YYYY-MM-DD
   party: string // контрагент (покупатель/поставщик)
+  partyInn?: string // ИНН контрагента (строка 100 раздела 9), извлечён из реквизитов
   withVat: number // стоимость с НДС
   rate: number // ставка, %
   vat: number // сумма НДС
@@ -20,11 +22,15 @@ function toLines(docs: Doc[]): VatBookLine[] {
     .filter((d) => d.vatMode !== 'none')
     .map((d, i) => {
       const t = docTotals(d)
+      // ИНН покупателя — из свободного текста реквизитов (первое число 10–12 цифр).
+      const innMatch = (d.buyerDetails || '').match(/\b(\d{10,12})\b/)
       return {
         num: i + 1,
         doc: `${DOC_TYPE_LABEL[d.type]} № ${d.number}`,
+        docNumber: d.number,
         date: d.date,
         party: d.buyer || '—',
+        partyInn: innMatch ? innMatch[1] : undefined,
         withVat: t.subtotal,
         rate: t.rate,
         vat: t.vat,

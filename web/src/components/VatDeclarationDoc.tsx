@@ -1,208 +1,209 @@
-import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { VatResult } from '../lib/taxcore'
 import { sumVat, type VatBooks, type VatBookLine } from '../lib/vatBooks'
-import { Cells, FormKndHeader, FormField, SignBlock, OfficialNote } from './officialForm'
+import { Cells, OfficialTop, OfficialNote } from './officialForm'
 
-/** Код строки раздела 3 по ставке НДС (по бланку КНД 1151001 ред. 2025–2026). */
-const RATE_CODE: Record<number, string> = { 22: '003', 20: '010', 10: '020', 7: '021', 5: '022' }
+/** Код строки «стоимость без налога по ставке» (раздел 9). */
+const BASE_CODE: Record<number, string> = { 22: '170', 20: '175', 18: '175', 10: '180', 7: '181', 5: '182', 0: '190' }
+/** Код строки «сумма налога по ставке» (раздел 9). */
+const VAT_CODE: Record<number, string> = { 22: '200', 20: '205', 18: '205', 10: '210', 7: '211', 5: '212' }
+/** Итоговые коды по книге продаж: стоимость без налога / сумма налога по ставке. */
+const TOT_BASE: Record<number, string> = { 22: '230', 20: '235', 18: '235', 10: '240', 7: '241', 5: '242', 0: '250' }
+const TOT_VAT: Record<number, string> = { 22: '260', 20: '265', 18: '265', 10: '270', 7: '271', 5: '272' }
 
-const r0 = (n: number) => formatRub(Math.round(n))
-const rk = (n: number) => formatRub(n, { kopecks: true })
+const lbl = 'text-[11px] text-slate-600'
+const code = (c: string) => <span className="ml-1 font-mono text-[10px] text-slate-400">{c}</span>
 
-/** Таблица раздела книги (8 — покупки / 9 — продажи). */
-function BookSection({
-  code,
-  title,
-  partyLabel,
-  lines,
-}: {
-  code: string
-  title: string
-  partyLabel: string
-  lines: VatBookLine[]
-}) {
-  const t = sumVat(lines)
+/** Сумма в клетки: рубли (право) + «.» + 2 копейки. */
+function SumCells({ amount, rubCells = 15 }: { amount: number; rubCells?: number }) {
+  const rub = String(Math.trunc(amount)).padStart(rubCells, ' ')
+  const kop = String(Math.round((amount - Math.trunc(amount)) * 100)).padStart(2, '0')
   return (
-    <>
-      <div className="mt-5 mb-2 font-semibold">
-        {code}. {title}
-      </div>
-      {lines.length === 0 ? (
-        <p className="text-[12px] text-slate-500">Нет документов с НДС за период.</p>
-      ) : (
-        <table className="w-full border-collapse text-[12px]">
-          <thead>
-            <tr className="border-y border-slate-300 text-left">
-              <th className="w-8 py-1 pr-2 font-semibold">№</th>
-              <th className="py-1 pr-2 font-semibold">Документ</th>
-              <th className="py-1 pr-2 font-semibold">Дата</th>
-              <th className="py-1 pr-2 font-semibold">{partyLabel}</th>
-              <th className="py-1 pr-2 text-right font-semibold">Стоимость с НДС</th>
-              <th className="py-1 pr-2 text-right font-semibold">Ставка</th>
-              <th className="py-1 text-right font-semibold">НДС</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map((l) => (
-              <tr key={l.num} className="border-b border-slate-200 align-top">
-                <td className="py-1 pr-2">{l.num}</td>
-                <td className="py-1 pr-2">{l.doc}</td>
-                <td className="tnum py-1 pr-2">{formatDate(l.date)}</td>
-                <td className="py-1 pr-2">{l.party}</td>
-                <td className="tnum py-1 pr-2 text-right">{rk(l.withVat)}</td>
-                <td className="tnum py-1 pr-2 text-right">{l.rate}%</td>
-                <td className="tnum py-1 text-right">{rk(l.vat)}</td>
-              </tr>
-            ))}
-            <tr className="border-t-2 border-slate-300 font-semibold">
-              <td className="py-1 pr-2" colSpan={4}>
-                Итого
-              </td>
-              <td className="tnum py-1 pr-2 text-right">{rk(t.withVat)}</td>
-              <td />
-              <td className="tnum py-1 text-right">{rk(t.vat)}</td>
-            </tr>
-          </tbody>
-        </table>
-      )}
-    </>
+    <span className="inline-flex items-center gap-1">
+      <Cells value={rub} count={rubCells} />
+      <span className="font-semibold">.</span>
+      <Cells value={kop} count={2} />
+    </span>
   )
 }
 
-function L({ code, label, value }: { code: string; label: string; value: string }) {
+/** Дата ISO → клетки ДД.ММ.ГГГГ. */
+function DateCells({ iso }: { iso: string }) {
+  const [y = '', m = '', d = ''] = (iso || '').split('-')
   return (
-    <tr className="border-b border-slate-200">
-      <td className="w-16 py-1.5 align-top font-mono text-xs text-slate-500">{code}</td>
-      <td className="py-1.5 pr-3 align-top">{label}</td>
-      <td className="tnum w-44 py-1.5 text-right align-top font-medium">{value}</td>
-    </tr>
+    <span className="inline-flex items-center gap-0.5">
+      <Cells value={d} count={2} />.<Cells value={m} count={2} />.<Cells value={y} count={4} />
+    </span>
   )
 }
 
-/** Печатная форма декларации по НДС (КНД 1151001), упрощённо для ИП на УСН-плательщика. */
+/** Один счёт-фактура в книге продаж (раздел 9) — официальные коды строк. */
+function SalesEntry({ line }: { line: VatBookLine }) {
+  const base = line.withVat - line.vat
+  const innDigits = (line.partyInn || '').replace(/\D/g, '')
+  const Row = ({ label, c, children }: { label: string; c: string; children: React.ReactNode }) => (
+    <div className="flex flex-wrap items-center gap-2 py-0.5">
+      <span className={`${lbl} min-w-[280px] flex-1`}>
+        {label}
+        {code(c)}
+      </span>
+      {children}
+    </div>
+  )
+  return (
+    <div className="border border-slate-400 p-2">
+      <Row label="Порядковый номер" c="005">
+        <Cells value={String(line.num)} count={3} />
+      </Row>
+      <Row label="Код вида операции" c="010">
+        <Cells value="01" count={2} />
+      </Row>
+      <Row label="Номер счёта-фактуры продавца" c="020">
+        <Cells value={line.docNumber} count={12} />
+      </Row>
+      <Row label="Дата счёта-фактуры продавца" c="030">
+        <DateCells iso={line.date} />
+      </Row>
+      <Row label={`ИНН / КПП покупателя (${line.party || '—'})`} c="100">
+        <Cells value={innDigits} count={12} />
+      </Row>
+      <Row label="Стоимость продаж по счёту-фактуре, включая налог" c="160">
+        <SumCells amount={line.withVat} />
+      </Row>
+      <Row label={`Стоимость продаж без налога по ставке ${line.rate}%`} c={BASE_CODE[line.rate] ?? '182'}>
+        <SumCells amount={base} />
+      </Row>
+      <Row label={`Сумма налога по ставке ${line.rate}%`} c={VAT_CODE[line.rate] ?? '212'}>
+        <SumCells amount={line.vat} />
+      </Row>
+    </div>
+  )
+}
+
+/** Печатная декларация по НДС (КНД 1151001) — официальный клеточный бланк: титул,
+ *  раздел 1 (к уплате), раздел 9 (книга продаж по счетам-фактурам + итоги). */
 export function VatDeclarationDoc({ org, vat, books }: { org: Org; vat: VatResult; books?: VatBooks }) {
   const rate = vat.rate.toNumber()
-  const special = vat.mode === 'rate5' || vat.mode === 'rate7'
-  const rateCode = RATE_CODE[rate] ?? '010'
-  // Исчисленный НДС (стр.118) = output_vat из taxcore (налог с реализации до вычета).
-  // Раньше = vat+вычет, что при входящем НДС больше исходящего давало сумму вычета.
-  const assessed = vat.output_vat.toNumber()
+  const sales = books?.sales ?? []
+  const tot = sumVat(sales)
+  const totBase = tot.withVat - tot.vat
+
+  if (vat.exempt) {
+    return (
+      <div className="text-[12px]">
+        <OfficialTop code="1151001" inn={org.inn} kpp="" page="001" />
+        <div className="text-[10px] text-slate-500">Форма по КНД 1151001</div>
+        <div className="mt-1 text-center text-sm font-semibold">
+          Налоговая декларация по налогу на добавленную стоимость
+        </div>
+        <p className="mt-5 text-sm text-slate-600">
+          Организация освобождена от НДС (ст. 145 НК РФ) — декларация по НДС не подаётся.
+        </p>
+        <OfficialNote />
+      </div>
+    )
+  }
+  if (vat.mode === 'usn_lost') {
+    return (
+      <div className="text-[12px]">
+        <OfficialTop code="1151001" inn={org.inn} kpp="" page="001" />
+        <p className="mt-5 text-sm text-slate-600">
+          Доход превысил лимит УСН — НДС считается по общей системе (ОСНО).
+        </p>
+        <OfficialNote />
+      </div>
+    )
+  }
+
   return (
-    <div>
-      <FormKndHeader
-        knd="1151001"
-        title="Налоговая декларация по налогу на добавленную стоимость"
-        inn={org.inn}
-      />
-      <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
-        <FormField label="Номер корректировки">
-          <Cells value="0" count={3} />
-        </FormField>
-        <FormField label="Налоговый период (код квартала)">
+    <div className="text-[12px]">
+      {/* ───────── Титульный лист ───────── */}
+      <OfficialTop code="1151001" inn={org.inn} kpp="" page="001" />
+      <div className="text-[10px] text-slate-500">Форма по КНД 1151001</div>
+      <div className="mt-1 text-center text-sm font-semibold">
+        Налоговая декларация по налогу на добавленную стоимость
+      </div>
+      <div className="mt-3 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={lbl}>Номер корректировки</span>
+          <Cells value="0--" count={3} />
+          <span className={`${lbl} ml-3`}>Налоговый период (код)</span>
           <Cells count={2} />
-        </FormField>
-        <FormField label="Представляется в налоговый орган (код)">
-          <Cells value={org.taxOfficeCode} count={4} />
-        </FormField>
-        <FormField label="Отчётный (календарный) год">
+          <span className={`${lbl} ml-3`}>Отчётный год</span>
           <Cells value={String(org.year)} count={4} />
-        </FormField>
-        <FormField label="По месту нахождения (учёта) (код)">
-          <span className="text-[12px]">116 — по месту учёта ИП</span>
-        </FormField>
-        <FormField label="Налогоплательщик">
-          <span className="text-[12px]">{org.fio || org.name || '—'}</span>
-        </FormField>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={lbl}>Представляется в налоговый орган (код)</span>
+          <Cells value={org.taxOfficeCode} count={4} />
+          <span className={`${lbl} ml-3`}>По месту нахождения (учёта) (код)</span>
+          <Cells value="116" count={3} />
+        </div>
+        <div className="text-[11px]">
+          Налогоплательщик: <span className="font-medium">{org.fio || org.name || '—'}</span>
+        </div>
       </div>
 
-      {vat.exempt ? (
-        <p className="mt-5 text-sm text-slate-600">
-          Организация освобождена от НДС — декларация не подаётся (ст. 145 НК РФ).
+      {/* ───────── Раздел 1 ───────── */}
+      <div className="mt-6 border-t-2 border-dashed border-slate-300 pt-4">
+        <OfficialTop code="1151001" inn={org.inn} kpp="" page="002" />
+        <div className="mb-2 text-[12px] font-semibold">
+          Раздел 1. Сумма налога, подлежащая уплате в бюджет
+        </div>
+        <div className="flex flex-wrap items-center gap-2 py-0.5">
+          <span className={`${lbl} min-w-[280px] flex-1`}>Код по ОКТМО{code('010')}</span>
+          <Cells value={org.oktmo || ''} count={11} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 py-0.5">
+          <span className={`${lbl} min-w-[280px] flex-1`}>Код бюджетной классификации{code('020')}</span>
+          <Cells value="18210301000011000110" count={20} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 py-0.5">
+          <span className={`${lbl} min-w-[280px] flex-1`}>
+            Сумма налога к уплате (п.1 ст.173 НК){code('040')}
+          </span>
+          <Cells value={String(Math.round(vat.vat.toNumber())).padStart(15, ' ')} count={15} />
+        </div>
+        <p className="mt-2 text-[10px] text-slate-400">
+          Ставка {rate}% (УСН-плательщик НДС){vat.mode === 'rate5' || vat.mode === 'rate7' ? ', без вычета входящего НДС (ст. 170 НК)' : ''}.
         </p>
-      ) : vat.mode === 'usn_lost' ? (
-        <p className="mt-5 text-sm text-slate-600">
-          Доход превысил лимит УСН — НДС считается по общей системе. Сформируйте декларацию по ОСНО.
-        </p>
-      ) : (
-        <>
-          <div className="mt-5 mb-2 font-semibold">Раздел 1. Сумма налога к уплате в бюджет</div>
-          <table className="w-full text-[13px]">
-            <tbody>
-              <L code="010" label="КБК" value="182 1 03 01000 01 1000 110" />
-              <L code="020" label="Код по ОКТМО" value={org.oktmo || '—'} />
-              <L code="040" label="Сумма налога к уплате (п. 1 ст. 173 НК)" value={r0(vat.vat.toNumber())} />
-            </tbody>
-          </table>
+      </div>
 
-          <div className="mt-5 mb-2 font-semibold">Раздел 3. Расчёт суммы налога</div>
-          <table className="w-full border-collapse text-[12.5px]">
-            <thead>
-              <tr className="border-y border-slate-300 text-left">
-                <th className="py-1 pr-2 font-semibold">Объект налогообложения</th>
-                <th className="w-20 py-1 pr-2 font-semibold">Код строки</th>
-                <th className="py-1 pr-2 text-right font-semibold">Налоговая база</th>
-                <th className="w-16 py-1 pr-2 text-right font-semibold">Ставка</th>
-                <th className="py-1 text-right font-semibold">Сумма НДС</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-200">
-                <td className="py-1.5 pr-2">Реализация товаров (работ, услуг), передача прав</td>
-                <td className="py-1.5 pr-2 font-mono">{rateCode}</td>
-                <td className="tnum py-1.5 pr-2 text-right">{r0(vat.base.toNumber())}</td>
-                <td className="py-1.5 pr-2 text-right">{rate}%</td>
-                <td className="tnum py-1.5 text-right">{r0(assessed)}</td>
-              </tr>
-              <tr className="border-b border-slate-200 font-medium">
-                <td className="py-1.5 pr-2" colSpan={4}>
-                  Итого сумма налога, исчисленная (стр. 118)
-                </td>
-                <td className="tnum py-1.5 text-right">{r0(assessed)}</td>
-              </tr>
-              {!special && (
-                <tr className="border-b border-slate-200">
-                  <td className="py-1.5 pr-2" colSpan={4}>
-                    Налоговые вычеты, всего — входящий НДС (стр. 190)
-                  </td>
-                  <td className="tnum py-1.5 text-right">{r0(vat.input_vat_deducted.toNumber())}</td>
-                </tr>
-              )}
-              <tr className="border-t-2 border-slate-300 font-semibold">
-                <td className="py-1.5 pr-2" colSpan={4}>
-                  Итого к уплате в бюджет (стр. 200)
-                </td>
-                <td className="tnum py-1.5 text-right">{r0(vat.vat.toNumber())}</td>
-              </tr>
-            </tbody>
-          </table>
-          {special && (
-            <p className="mt-3 text-[12px] text-slate-600">
-              Специальная ставка {rate}% применяется без вычета входящего НДС (ст. 170 НК РФ).
-            </p>
-          )}
+      {/* ───────── Раздел 9 — книга продаж ───────── */}
+      <div className="mt-6 border-t-2 border-dashed border-slate-300 pt-4">
+        <OfficialTop code="0031 7160" inn={org.inn} kpp="" page="003" />
+        <div className="mb-2 text-[12px] font-semibold leading-snug">
+          Раздел 9. Сведения из книги продаж об операциях, отражаемых за истекший налоговый период
+        </div>
+        {sales.length === 0 ? (
+          <div className="rounded border border-slate-300 p-3 text-[11px] text-slate-500">
+            Нет счетов-фактур (документов с НДС) за период. Книга продаж пуста.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {sales.map((l) => (
+              <SalesEntry key={l.num} line={l} />
+            ))}
+            {/* Итоги по книге продаж */}
+            <div className="border-2 border-slate-500 p-2">
+              <div className="mb-1 text-[11px] font-semibold">Итоговые данные по книге продаж</div>
+              <div className="flex flex-wrap items-center gap-2 py-0.5">
+                <span className={`${lbl} min-w-[280px] flex-1`}>
+                  Всего стоимость продаж без налога по ставке {rate}%{code(TOT_BASE[rate] ?? '242')}
+                </span>
+                <SumCells amount={totBase} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 py-0.5">
+                <span className={`${lbl} min-w-[280px] flex-1`}>
+                  Всего сумма налога по книге продаж по ставке {rate}%{code(TOT_VAT[rate] ?? '272')}
+                </span>
+                <SumCells amount={tot.vat} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
 
-          {books && (
-            <BookSection
-              code="Раздел 9"
-              title="Сведения из книги продаж"
-              partyLabel="Покупатель"
-              lines={books.sales}
-            />
-          )}
-          {books && !special && (
-            <BookSection
-              code="Раздел 8"
-              title="Сведения из книги покупок (вычеты)"
-              partyLabel="Поставщик"
-              lines={books.purchases}
-            />
-          )}
-        </>
-      )}
-
-      {!vat.exempt && vat.mode !== 'usn_lost' && <SignBlock name={org.fio || org.name} />}
-      <OfficialNote extra="Разделы 8/9 — из книг покупок/продаж. Реальная подача НДС — через оператора ЭДО." />
+      <OfficialNote extra="Раздел 9 — из книги продаж (счета-фактуры с НДС). Реальная подача НДС — через оператора ЭДО." />
     </div>
   )
 }
