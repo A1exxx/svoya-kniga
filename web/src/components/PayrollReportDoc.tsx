@@ -2,10 +2,8 @@ import { payrollSummary } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import type { Org } from '../state/orgStore'
 import type { Employee } from '../state/employeesStore'
-import { Cells, FormKndHeader, FormField, SignBlock, OfficialNote } from './officialForm'
+import { Cells, FormKndHeader, FormField, SignBlock, OfficialNote, OfficialTop } from './officialForm'
 
-/** 'YYYY-MM-DD' → 'DDMMYYYY' (для клеточного поля даты). */
-const dmy = (iso?: string) => (iso ? iso.split('-').reverse().join('') : '')
 const digits = (s?: string) => (s ? s.replace(/\D/g, '') : '')
 
 export type ReportType = '6ndfl' | 'rsv' | 'efs1' | 'perssved'
@@ -170,84 +168,193 @@ export function PayrollReportDoc({
     )
   }
 
-  // perssved — официальный макет КНД 1151162
+  // perssved — официальный бланк КНД 1151162 (точь-в-точь, 2 страницы)
+  const cellCls =
+    'inline-flex h-5 w-[13px] items-center justify-center border border-slate-400 text-[11px] leading-none'
+  const lbl = 'text-[11px] text-slate-600'
+  const code = (c: string) => <span className="font-mono text-[10px] text-slate-400">{c}</span>
+  const fioOf = (s: string) => (s || '').trim().split(/\s+/)
+  const FioRow = ({ s, len = 22 }: { s: string; len?: number }) => (
+    <div className="flex flex-wrap gap-[2px]">
+      {Array.from({ length: len }, (_, i) => (
+        <span key={i} className={cellCls}>
+          {s[i] ?? ''}
+        </span>
+      ))}
+    </div>
+  )
+  const Snils = ({ s }: { s: string }) => {
+    const d = digits(s).padEnd(11, ' ')
+    return (
+      <span className="inline-flex items-center gap-[3px]">
+        <Cells value={d.slice(0, 3)} count={3} />—<Cells value={d.slice(3, 6)} count={3} />—
+        <Cells value={d.slice(6, 9)} count={3} /> <Cells value={d.slice(9, 11)} count={2} />
+      </span>
+    )
+  }
+  const SumCells = ({ amount }: { amount: number }) => {
+    const rub = String(Math.trunc(amount)).padStart(13, ' ')
+    const kop = String(Math.round((amount - Math.trunc(amount)) * 100)).padStart(2, '0')
+    return (
+      <span className="inline-flex items-center gap-1">
+        <Cells value={rub} count={13} />
+        <span className="font-semibold">.</span>
+        <Cells value={kop} count={2} />
+      </span>
+    )
+  }
+  const ipFio = fioOf(org.fio)
+  const pages = 1 + Math.max(1, Math.ceil(n / 4))
+
   return (
-    <div>
-      <FormKndHeader
-        knd="1151162"
-        title="Персонифицированные сведения о физических лицах"
-        inn={org.inn}
-      />
-      <div className="mt-3 grid gap-x-6 sm:grid-cols-2">
-        <FormField label="Номер корректировки">
-          <Cells value="0" count={3} />
-        </FormField>
-        <FormField label="Отчётный период (месяц)">
+    <div className="text-[12px]">
+      {/* ───────── Стр. 001 — титульный ───────── */}
+      <OfficialTop code="2970 1018" inn={org.inn} kpp="" page="001" />
+      <div className="text-[10px] text-slate-500">Форма по КНД 1151162</div>
+      <div className="mt-1 text-center text-sm font-semibold">
+        Персонифицированные сведения о физических лицах
+      </div>
+
+      <div className="mt-3 space-y-1.5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={lbl}>Номер корректировки</span>
+          <Cells value="0--" count={3} />
+          <span className={`${lbl} ml-3`}>Период (код)</span>
           <Cells count={2} />
-        </FormField>
-        <FormField label="Представляется в налоговый орган (код)">
-          <Cells value={org.taxOfficeCode} count={4} />
-        </FormField>
-        <FormField label="Отчётный (календарный) год">
+          <span className={`${lbl} ml-3`}>Календарный год</span>
           <Cells value={String(org.year)} count={4} />
-        </FormField>
-        <FormField label="По месту нахождения (учёта) (код)">
-          <span className="text-[12px]">120 — по месту жительства ИП</span>
-        </FormField>
-        <FormField label="Налогоплательщик">
-          <span className="text-[12px]">{org.fio || org.name || '—'}</span>
-        </FormField>
-        <FormField label="Код вида деятельности по ОКВЭД">
-          <span className="text-[12px]">{org.okved || '—'}</span>
-        </FormField>
-        <FormField label="Количество физических лиц">
-          <Cells value={String(n)} count={3} />
-        </FormField>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={lbl}>Представляется в налоговый орган (код)</span>
+          <Cells value={org.taxOfficeCode} count={4} />
+          <span className={`${lbl} ml-3`}>По месту нахождения (учёта) (код)</span>
+          <Cells value="120" count={3} />
+        </div>
+        <FioRow s={ipFio[0] || ''} />
+        <FioRow s={ipFio[1] || ''} />
+        <FioRow s={ipFio[2] || ''} />
+        <div className="text-[9px] text-slate-400">
+          (фамилия, имя, отчество индивидуального предпринимателя)
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={lbl}>ОГРНИП</span>
+          <Cells value={org.ogrnip} count={15} />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={lbl}>Сведения составлены на</span>
+          <Cells value={String(pages).padStart(3, '0')} count={3} />
+          <span className={lbl}>страницах</span>
+        </div>
       </div>
 
-      <div className="mt-5 mb-2 text-[12px] font-semibold">
-        Сведения о физических лицах и суммах выплат
-      </div>
-      <div className="space-y-2">
-        {rows.map((a, i) => {
-          const [last = '', first = '', middle = ''] = (a.e.fio || '').trim().split(/\s+/)
-          return (
-            <div key={a.e.id} className="rounded border border-slate-300 p-2.5">
-              <div className="mb-1 text-[11px] text-slate-400">Физическое лицо {i + 1}</div>
-              <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2">
-                <FormField label="010. ИНН в РФ">
-                  <Cells count={12} />
-                </FormField>
-                <FormField label="020. СНИЛС">
-                  <Cells value={digits(a.e.snils)} count={11} />
-                </FormField>
-                <FormField label="030. Фамилия">
-                  <span className="text-[12px]">{last || '—'}</span>
-                </FormField>
-                <FormField label="040. Имя">
-                  <span className="text-[12px]">{first || '—'}</span>
-                </FormField>
-                <FormField label="050. Отчество">
-                  <span className="text-[12px]">{middle || '—'}</span>
-                </FormField>
-                <FormField label="060. Дата рождения">
-                  <Cells value={dmy(a.e.birthDate)} count={8} />
-                </FormField>
-                <FormField label="070. Сумма выплат и иных вознаграждений">
-                  <span className="tnum font-semibold">{formatRub(a.grossMonth, { kopecks: true })}</span>
-                </FormField>
-              </div>
+      <div className="mt-3 grid grid-cols-2 gap-3">
+        <div className="rounded border border-slate-300 p-2">
+          <div className="flex gap-2">
+            <span className={cellCls}>1</span>
+            <div className="text-[10px] leading-tight text-slate-600">
+              Достоверность и полноту сведений подтверждаю: 1 — плательщик страховых взносов; 2 —
+              представитель
             </div>
-          )
-        })}
-      </div>
-      <div className="mt-2 flex justify-between border-t-2 border-slate-300 pt-1.5 text-[12px] font-semibold">
-        <span>Итого выплат за месяц по {n} лицам</span>
-        <span className="tnum">{r2(totals.grossMonth)}</span>
+          </div>
+          <div className="mt-2 space-y-1">
+            <FioRow s={ipFio[0] || ''} />
+            <FioRow s={ipFio[1] || ''} />
+            <FioRow s={ipFio[2] || ''} />
+            <div className="text-[9px] text-slate-400">(фамилия, имя, отчество полностью)</div>
+          </div>
+          <div className="mt-2 flex items-center gap-3">
+            <span className={lbl}>Подпись _________</span>
+            <span className="flex items-center gap-1">
+              <span className={lbl}>Дата</span>
+              <Cells count={2} />.<Cells count={2} />.<Cells count={4} />
+            </span>
+          </div>
+        </div>
+        <div className="rounded border border-slate-300 p-2 text-[10px] text-slate-500">
+          <div className="text-center font-semibold text-slate-600">
+            Заполняется работником налогового органа
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            Представлено (код) <Cells count={3} />
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            на <Cells count={3} /> страницах
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            Дата <Cells count={2} />.<Cells count={2} />.<Cells count={4} />
+          </div>
+          <div className="mt-6 flex justify-between">
+            <span>Фамилия, И.О.</span>
+            <span>Подпись</span>
+          </div>
+        </div>
       </div>
 
-      <SignBlock name={org.fio || org.name} />
-      <OfficialNote extra="Персонифицированные сведения подаются ежемесячно до 25 числа." />
+      {/* ───────── Стр. 002 — данные ───────── */}
+      <div className="mt-6 border-t-2 border-dashed border-slate-300 pt-4">
+        <OfficialTop code="2970 1025" inn={org.inn} kpp="" page="002" />
+        <div className="mb-2 text-center text-sm font-semibold leading-snug">
+          Персональные данные физических лиц и сведения о суммах
+          <br />
+          выплат и иных вознаграждений в их пользу
+        </div>
+        {n === 0 ? (
+          <div className="rounded border border-slate-300 p-3 text-[11px] text-slate-500">
+            Сотрудников нет — данные не заполняются. Добавьте сотрудников в разделе «Сотрудники».
+          </div>
+        ) : (
+          <div className="space-y-0">
+            {rows.map((a) => {
+              const f = fioOf(a.e.fio)
+              return (
+                <div key={a.e.id} className="border-b-2 border-slate-300 py-2">
+                  <div className="flex items-center gap-2">
+                    <span className={lbl}>Признак аннулирования сведений о физическом лице</span>
+                    {code('010')}
+                    <Cells count={1} />
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="flex items-center gap-1">
+                      <span className={lbl}>ИНН</span>
+                      {code('020')}
+                      <Cells value={a.e.inn} count={12} />
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className={lbl}>СНИЛС</span>
+                      {code('030')}
+                      <Snils s={a.e.snils || ''} />
+                    </span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`${lbl} w-16`}>Фамилия</span>
+                    {code('040')}
+                    <FioRow s={f[0] || ''} />
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`${lbl} w-16`}>Имя</span>
+                    {code('050')}
+                    <FioRow s={f[1] || ''} />
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className={`${lbl} w-16`}>Отчество</span>
+                    {code('060')}
+                    <FioRow s={f[2] || ''} />
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className={lbl}>
+                      Сумма выплат и иных вознаграждений, начисленных в пользу физического лица
+                    </span>
+                    {code('070')}
+                    <SumCells amount={a.grossMonth} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      <OfficialNote extra="Персонифицированные сведения подаются ежемесячно до 25 числа следующего месяца." />
     </div>
   )
 }

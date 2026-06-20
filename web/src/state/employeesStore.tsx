@@ -77,6 +77,7 @@ export interface Employee {
   /** ИП в реестре МСП — льготный тариф взносов */
   msp: boolean
   // Личные данные (для печатных форм карточки)
+  inn?: string // ИНН физлица (стр. 020 перссведений)
   snils?: string
   passport?: string
   address?: string
