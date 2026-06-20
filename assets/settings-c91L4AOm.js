@@ -1,1 +1,0 @@
-import{nt as e}from"./index-oR3j-v6B.js";var t=`svoyakniga.automation.v1`,n={autofill:!1,insights:!1};function r(){try{let e=localStorage.getItem(t);return e?{...n,...JSON.parse(e)}:{...n}}catch{return{...n}}}function i(n,i){let a={...r(),[n]:i};e(t,JSON.stringify(a));try{window.dispatchEvent(new CustomEvent(`svk:automation-change`))}catch{}}export{i as n,r as t};
