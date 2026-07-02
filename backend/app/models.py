@@ -112,3 +112,47 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     detail: Mapped[str] = mapped_column(String(512), default="")
     at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+# Роли участника рабочего стола (режим «обслуживающая бухгалтерия»):
+#   owner      — владелец: всё + управление командой и приглашениями;
+#   accountant — бухгалтер: полный доступ к данным (читать/сохранять/откатывать);
+#   viewer     — просмотр: только чтение (сохранение отклоняется сервером).
+ROLE_OWNER = "owner"
+ROLE_ACCOUNTANT = "accountant"
+ROLE_VIEWER = "viewer"
+ROLES = (ROLE_OWNER, ROLE_ACCOUNTANT, ROLE_VIEWER)
+
+
+class Membership(Base):
+    """Участник рабочего стола: несколько бухгалтеров ведут один кабинет."""
+
+    __tablename__ = "memberships"
+    __table_args__ = (UniqueConstraint("workspace_id", "user_id", name="uq_ws_user"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    role: Mapped[str] = mapped_column(String(16), default=ROLE_ACCOUNTANT)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    user: Mapped["User"] = relationship()
+    workspace: Mapped["Workspace"] = relationship()
+
+
+class Invite(Base):
+    """Приглашение в рабочий стол по коду (владелец создаёт, коллега вводит код)."""
+
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspaces.id", ondelete="CASCADE"), index=True)
+    code: Mapped[str] = mapped_column(String(16), unique=True, index=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(16), default=ROLE_ACCOUNTANT)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    workspace: Mapped["Workspace"] = relationship()

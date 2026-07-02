@@ -2,9 +2,11 @@ import { Suspense, useEffect, useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom'
 import { IconHelp, IconMenu } from './icons'
 import { Sidebar } from './Sidebar'
+import { useCloud } from '../state/authStore'
 
 export function Layout() {
   const navigate = useNavigate()
+  const { role } = useCloud()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [storageFull, setStorageFull] = useState(false)
 
@@ -17,6 +19,11 @@ export function Layout() {
 
   return (
     <div className="flex h-full">
+      {role === 'viewer' && (
+        <div className="fixed inset-x-0 top-0 z-50 bg-amber-500 px-4 py-1.5 text-center text-xs font-medium text-white">
+          Кабинет открыт в режиме «только просмотр» — изменения не сохраняются на сервер.
+        </div>
+      )}
       {storageFull && (
         <div className="fixed inset-x-0 top-0 z-50 bg-red-600 px-4 py-2 text-center text-sm text-white">
           Хранилище браузера переполнено — последние данные могли не сохраниться. Откройте

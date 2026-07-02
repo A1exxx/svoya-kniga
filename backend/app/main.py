@@ -30,8 +30,9 @@ from taxcore import (
 from .auth import router as auth_router
 from .db import init_db
 from .sync import router as sync_router
+from .team import router as team_router
 
-app = FastAPI(title="СвояКнига API", version="0.2.0")
+app = FastAPI(title="СвояКнига API", version="0.3.0")
 
 # Источники для CORS. С куками нельзя "*" — перечисляем явные origin
 # (локалка + адрес фронтенда). Задаётся через CORS_ORIGINS (через запятую).
@@ -48,6 +49,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(sync_router)
+app.include_router(team_router)
 
 
 @app.on_event("startup")

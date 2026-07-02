@@ -28,6 +28,7 @@ import {
 /** Навигация в духе Контур.Эльбы (левое вертикальное меню). */
 export const NAV = [
   { to: '/', label: 'Задачи и отчётность', Icon: IconTasks, end: true },
+  { to: '/clients', label: 'Обзор клиентов', Icon: IconUsers },
   { to: '/archive', label: 'Архив', Icon: IconCheck },
   { to: '/taxes', label: 'Налоги', Icon: IconCalc },
   { to: '/reports', label: 'Отчётность', Icon: IconReport },
