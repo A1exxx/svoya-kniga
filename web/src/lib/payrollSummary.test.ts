@@ -9,7 +9,9 @@ function org(p: Partial<Org> = {}): Org {
     id: 'o', name: 'ИП Тест', inn: '', ogrnip: '', fio: '', regDate: '', address: '', okved: '',
     oktmo: '', okpo: '', taxOfficeCode: '', phone: '', email: '', espOwner: '', espValidTo: '', ausn: false, tradeFee: false,
     bankAccount: '', bik: '', bankName: '', corrAccount: '', taxSystem: 'usn', usnObject: 'income', regionalRate: null,
-    hasEmployees: true, vat: false, vatMode: 'auto', year: 2026, income: 0, expenses: 0, ...p,
+    hasEmployees: true, vat: false, vatMode: 'auto', year: 2026, income: 0, expenses: 0,
+    openingBalance: 0,
+    assignee: '', ...p,
   }
 }
 

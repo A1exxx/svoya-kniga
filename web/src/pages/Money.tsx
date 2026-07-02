@@ -92,6 +92,22 @@ export function Money() {
     else expense += o.amount
   }
 
+  // Остаток на счету: начальный + ВСЕ приходы − ВСЕ расходы (все годы, включая
+  // неналоговые операции) — то, чего нет в Эльбе (видны только доходы/расходы).
+  let balance = activeOrg.openingBalance || 0
+  for (const o of ops) {
+    if (o.kind === 'income') balance += o.amount
+    else balance -= o.amount
+  }
+
+  // Маркетплейсы: деньги приходят УЖЕ за вычетом комиссии, а налог УСН считается
+  // с выручки ДО комиссии (комиссия — расход, а не уменьшение дохода). Детектим
+  // поступления от WB/Ozon/ЯМаркета и предупреждаем — частая ошибка селлеров.
+  const MP_RE = /вайлдберриз|wildberries|озон\b|ozon|яндекс[\s.]?маркет|market\.yandex|интернет решения/i
+  const mpIncome = yearOps
+    .filter((o) => o.kind === 'income' && o.taxable && MP_RE.test(o.counterparty))
+    .reduce((s, o) => s + o.amount, 0)
+
   // P&L: доход/расход/прибыль по всем операциям (управленческий вид), помесячно.
   const monthly = Array.from({ length: 12 }, () => ({ inc: 0, exp: 0 }))
   let pnlInc = 0
@@ -413,8 +429,34 @@ export function Money() {
         </Card>
       )}
 
+      {/* Маркетплейсы: налог считается с выручки ДО комиссии */}
+      {mpIncome > 0 && (
+        <div className="mb-4 rounded-lg bg-amber-50 px-4 py-2.5 text-sm text-warn">
+          ⚠ Поступлений от маркетплейсов (WB/Ozon/Я.Маркет): {formatRub(mpIncome)}. Помните: на счёт
+          приходит сумма <strong>за вычетом комиссии</strong>, а налог УСН считается с выручки{' '}
+          <strong>до комиссии</strong> (по отчёту маркетплейса). Добавьте недостающую часть выручки
+          отдельной доходной операцией, а комиссию — расходом (для «Д − Р»).
+        </div>
+      )}
+
       {/* Сводка */}
-      <div className="mb-5 grid gap-4 sm:grid-cols-3">
+      <div className="mb-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <div className="text-sm text-muted">Остаток на счету</div>
+          <div className={`tnum mt-1 text-2xl font-semibold ${balance >= 0 ? 'text-ink' : 'text-danger'}`}>
+            {formatRub(balance)}
+          </div>
+          <label className="mt-1.5 flex items-center gap-1.5 text-[11px] text-muted">
+            начальный:
+            <input
+              type="number"
+              className="w-24 rounded border border-line px-1.5 py-0.5 text-right text-[11px]"
+              value={activeOrg.openingBalance || 0}
+              onChange={(e) => updateActiveOrg({ openingBalance: Number(e.target.value) || 0 })}
+              title="Остаток на счету до первой операции в программе"
+            />
+          </label>
+        </Card>
         <Card>
           <div className="text-sm text-muted">Доходы (для налога)</div>
           <div className="tnum mt-1 text-2xl font-semibold text-ink">{formatRub(income)}</div>

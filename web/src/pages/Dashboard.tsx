@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { compute } from '../lib/compute'
-import { calcSalary } from '../lib/taxcore'
+import { calcSalary, getParams } from '../lib/taxcore'
 import { employeeSalaryOptions, isActiveInYear } from '../lib/payrollSummary'
 import { formatRub, formatDate } from '../lib/format'
 import { useOrg } from '../state/orgStore'
@@ -156,6 +156,39 @@ export function Dashboard() {
   const piggyIncome = c ? (c.quarterly ? c.byQuarter.reduce((s, q) => s + q.income, 0) : o.income) : 0
   const piggyPct = piggyIncome > 0 ? Math.round((obligation / piggyIncome) * 1000) / 10 : 0
 
+  // Контроль лимитов: приближение к порогу НДС-освобождения (20 млн в 2026) и к
+  // верхней границе УСН — предупреждаем с 80% порога, чтобы бухгалтер успел среагировать.
+  const limitWarnings: { text: string; danger: boolean }[] = []
+  try {
+    const p = getParams(o.year)
+    const vatLimit = p.vat_exempt_threshold.toNumber()
+    const usnLimit = p.vat_rate7_limit.toNumber() // верхняя граница дохода на УСН
+    if (!o.vat && piggyIncome >= vatLimit) {
+      limitWarnings.push({
+        text: `Доход ${formatRub(piggyIncome)} превысил порог освобождения от НДС (${formatRub(vatLimit)}) — включите «плательщик НДС» в Реквизитах и выберите ставку.`,
+        danger: true,
+      })
+    } else if (!o.vat && piggyIncome >= vatLimit * 0.8) {
+      limitWarnings.push({
+        text: `Доход ${formatRub(piggyIncome)} — уже ${Math.round((piggyIncome / vatLimit) * 100)}% порога освобождения от НДС (${formatRub(vatLimit)}). При превышении появится обязанность платить НДС.`,
+        danger: false,
+      })
+    }
+    if (piggyIncome >= usnLimit) {
+      limitWarnings.push({
+        text: `Доход ${formatRub(piggyIncome)} превысил лимит УСН (${formatRub(usnLimit)}) — право на упрощёнку утрачено, нужен переход на ОСНО. Срочно к бухгалтеру.`,
+        danger: true,
+      })
+    } else if (piggyIncome >= usnLimit * 0.8) {
+      limitWarnings.push({
+        text: `Доход ${formatRub(piggyIncome)} — ${Math.round((piggyIncome / usnLimit) * 100)}% лимита УСН (${formatRub(usnLimit)}). Планируйте налоговую нагрузку заранее.`,
+        danger: false,
+      })
+    }
+  } catch {
+    /* нет параметров года */
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">
       <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -209,6 +242,22 @@ export function Dashboard() {
           )}
         </Card>
       </div>
+
+      {/* Предупреждения о лимитах (НДС-порог / лимит УСН) */}
+      {limitWarnings.length > 0 && (
+        <div className="mb-6 space-y-2">
+          {limitWarnings.map((w, i) => (
+            <div
+              key={i}
+              className={`rounded-lg px-4 py-2.5 text-sm font-medium ${
+                w.danger ? 'bg-red-50 text-danger' : 'bg-amber-50 text-warn'
+              }`}
+            >
+              ⚠ {w.text}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Card>

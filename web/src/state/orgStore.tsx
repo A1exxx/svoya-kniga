@@ -57,6 +57,8 @@ export interface Org {
   year: number
   income: number
   expenses: number
+  openingBalance: number // начальный остаток на счету (для «Остаток денег» в «Деньгах»)
+  assignee: string // ответственный бухгалтер (имя/email) — режим бухфирмы
 }
 
 function makeId(): string {
@@ -99,6 +101,8 @@ function demoOrg(): Org {
     year: DEFAULT_YEAR,
     income: 2_400_000,
     expenses: 0,
+    openingBalance: 0,
+    assignee: '',
   }
 }
 

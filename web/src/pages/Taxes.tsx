@@ -4,6 +4,7 @@ import { formatRub, formatDate } from '../lib/format'
 import { useOrg, type OrgVatMode } from '../state/orgStore'
 import { useOps } from '../state/opsStore'
 import { getParams, calcVatUsn, calcOsnoIp, calcContributions, type UsnObject } from '../lib/taxcore'
+import { compareVatOptions } from '../lib/vatChoice'
 import { Card, Field, Note, Row, inputClass } from '../components/ui'
 import { IconCheck, IconClock, IconDoc, IconSend } from '../components/icons'
 import { PrintModal } from '../components/PrintModal'
@@ -89,6 +90,15 @@ export function Taxes() {
     vatRes = calcVatUsn(o.year, vatIncome, { mode: o.vatMode })
   } catch {
     vatRes = null
+  }
+
+  // Калькулятор выгодной ставки НДС (5/7 без вычета vs общая с вычетом).
+  const [inputVat, setInputVat] = useState(0)
+  let vatChoice: ReturnType<typeof compareVatOptions> | null = null
+  try {
+    vatChoice = o.vat && vatIncome > 0 ? compareVatOptions(o.year, vatIncome, inputVat) : null
+  } catch {
+    vatChoice = null
   }
 
   return (
@@ -449,6 +459,50 @@ export function Taxes() {
                     ))}
                   </>
                 ) : null}
+                {/* Какая ставка выгоднее: 5/7 без вычета vs общая с вычетом входного */}
+                {vatChoice && (
+                  <div className="mt-4 rounded-lg border border-line bg-slate-50/60 p-3 dark:bg-slate-800/40">
+                    <div className="mb-2 text-sm font-medium text-ink">
+                      Какая ставка выгоднее при доходе {formatRub(vatIncome)}?
+                    </div>
+                    <label className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+                      Входной НДС за год (из счетов-фактур поставщиков):
+                      <input
+                        type="number"
+                        min={0}
+                        className={`${inputClass} max-w-[160px] py-1 text-right text-xs`}
+                        value={inputVat}
+                        onChange={(e) => setInputVat(Math.max(0, Number(e.target.value) || 0))}
+                      />
+                    </label>
+                    <div className="space-y-1">
+                      {vatChoice.options.map((opt) => (
+                        <div
+                          key={opt.mode}
+                          className={`flex items-center justify-between rounded-lg border px-3 py-1.5 text-sm ${
+                            opt.mode === vatChoice!.best.mode
+                              ? 'border-ok bg-green-50 font-medium dark:bg-green-950/30'
+                              : 'border-line'
+                          }`}
+                        >
+                          <span>
+                            {opt.rate}%{' '}
+                            <span className="text-xs font-normal text-muted">({opt.note})</span>
+                            {opt.mode === vatChoice!.best.mode && (
+                              <span className="ml-2 text-xs text-ok">← выгоднее</span>
+                            )}
+                          </span>
+                          <span className="tnum">{formatRub(opt.vatDue)}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] text-muted">
+                      Подсказка для выбора (ст. 164 НК РФ). Спец-ставка 5/7% фиксируется на 12
+                      кварталов подряд — решение сверьте с бухгалтером. Выбранная ставка задаётся в
+                      «Реквизитах».
+                    </p>
+                  </div>
+                )}
                 <p className="mt-3 text-xs text-muted">
                   ИП на УСН платят НДС при доходе свыше порога освобождения (
                   {params ? formatRub(params.vat_exempt_threshold.toNumber()) : '60 млн'}/год): спец-ставки

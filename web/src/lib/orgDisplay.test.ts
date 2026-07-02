@@ -34,6 +34,8 @@ function org(p: Partial<Org>): Org {
     year: 2026,
     income: 0,
     expenses: 0,
+    openingBalance: 0,
+    assignee: '',
     ...p,
   }
 }

@@ -47,9 +47,22 @@ export const NAV = [
   { to: '/help', label: 'Помощь', Icon: IconHelp },
 ] as const
 
+// Разделы, скрываемые в «простом» режиме меню (для ИП без патента/товаров/писем ФНС).
+const ADVANCED_ROUTES = new Set(['/patent', '/tax-office', '/useful-docs', '/goods'])
+const UI_MODE_KEY = 'svk.uiMode'
+
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { orgs, activeOrgId, setActiveOrgId, addOrg, removeOrg } = useOrg()
   const navigate = useNavigate()
+  const [uiMode, setUiMode] = useState<'simple' | 'full'>(
+    (localStorage.getItem(UI_MODE_KEY) as 'simple' | 'full') || 'full'
+  )
+  const toggleUiMode = () => {
+    const next = uiMode === 'simple' ? 'full' : 'simple'
+    localStorage.setItem(UI_MODE_KEY, next)
+    setUiMode(next)
+  }
+  const nav = uiMode === 'simple' ? NAV.filter((n) => !ADVANCED_ROUTES.has(n.to)) : NAV
 
   // Добавить ИП и СРАЗУ открыть Реквизиты — куда вносить данные (иначе непонятно, что дальше).
   const onAddOrg = () => {
@@ -68,7 +81,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-auto px-2 py-3">
-        {NAV.map(({ to, label, Icon, ...rest }) => {
+        {nav.map(({ to, label, Icon, ...rest }) => {
           const end = 'end' in rest && rest.end
           return (
             <NavLink
@@ -162,6 +175,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
           Добавить ИП
         </button>
         <CloudStatus />
+        <button
+          type="button"
+          onClick={toggleUiMode}
+          className="w-full rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-medium text-muted transition-colors hover:text-ink"
+          title="Простой режим скрывает редкие разделы (Патент, Налоговая, Полезные документы, Товары)"
+        >
+          Меню: {uiMode === 'simple' ? 'простое · показать всё' : 'полное · упростить'}
+        </button>
         <ThemeToggle />
       </div>
     </aside>
