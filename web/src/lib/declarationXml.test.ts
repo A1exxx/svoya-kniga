@@ -43,3 +43,22 @@ describe('declarationUsnXml — доходы 6%: строка 100, нет 120', 
     expect(xml).not.toContain('КодСтр="120"')
   })
 })
+
+describe('формат файла обмена ФНС (2026)', () => {
+  const org = makeOrg({ inn: '360403769236', taxOfficeCode: '3604', income: 1_000_000 })
+  const xml = declarationUsnXml(org, compute(org))
+
+  it('ВерсФорм 5.09 (приказ ЕД-7-3/1017@)', () => {
+    expect(xml).toContain('ВерсФорм="5.09"')
+  })
+
+  it('ИдФайл по шаблону NO_USN_К_К_ИНН12_ГГГГММДД_GUID', () => {
+    expect(xml).toMatch(/ИдФайл="NO_USN_3604_3604_360403769236_\d{8}_[0-9A-F-]{36}"/)
+  })
+
+  it('имя скачиваемого файла совпадает с ИдФайл', async () => {
+    const { declarationFileName } = await import('./declarationXml')
+    const name = declarationFileName(org).replace(/\.xml$/, '')
+    expect(xml).toContain(`ИдФайл="${name}"`)
+  })
+})

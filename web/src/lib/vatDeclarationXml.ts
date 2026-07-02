@@ -30,9 +30,24 @@ function nowYmd(): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
 }
 
-export function vatDeclarationFileName(org: Org): string {
+// GUID фиксируется на загрузку страницы: имя файла и ИдФайл в XML должны совпадать.
+const SESSION_GUID: string = (() => {
+  try {
+    return crypto.randomUUID().toUpperCase()
+  } catch {
+    return 'DEMO0000-0000-0000-0000-000000000000'
+  }
+})()
+
+/** Идентификатор файла обмена: NO_NDS_К_К_ИНН12_ГГГГММДД_GUID (для ИП — ИНН без КПП). */
+function vatFileId(org: Org): string {
+  const ifns = org.taxOfficeCode || '0000'
   const inn = org.inn || '000000000000'
-  return `NO_NDS_0000_0000_${inn}0000_${nowYmd()}.xml`
+  return `NO_NDS_${ifns}_${ifns}_${inn}_${nowYmd()}_${SESSION_GUID}`
+}
+
+export function vatDeclarationFileName(org: Org): string {
+  return `${vatFileId(org)}.xml`
 }
 
 /** Строки книги (раздел 8/9) в XML. */
@@ -74,7 +89,8 @@ export function vatDeclarationXml(
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    `<Файл ИдФайл="${esc(vatDeclarationFileName(org).replace(/\.xml$/, ''))}" ВерсПрог="СвояКнига" ВерсФорм="5.08">`,
+    // ВерсФорм 5.12 — приказ ЕД-7-3/989@ в ред. ЕД-7-3/1227@ (ставки 5/7/22%, с 1 кв. 2026).
+    `<Файл ИдФайл="${esc(vatFileId(org))}" ВерсПрог="СвояКнига" ВерсФорм="5.12">`,
     '  <Документ КНД="1151001" ДатаДок="' + nowYmd() + '" Период="' + periodCode + '" ОтчетГод="' + org.year + '">',
     `    <СвНП><НПИП ИННФЛ="${esc(inn)}"/></СвНП>`,
     '    <НДС>',

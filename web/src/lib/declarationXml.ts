@@ -35,15 +35,23 @@ function nowYmd(): string {
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
 }
 
-function fileId(org: Org): string {
-  let guid = 'DEMO0000-0000-0000-0000-000000000000'
+// GUID фиксируется на загрузку страницы: имя скачиваемого файла и ИдФайл внутри
+// XML обязаны совпадать (требование приёмного комплекса ФНС), а они формируются
+// двумя разными вызовами.
+const SESSION_GUID: string = (() => {
   try {
-    guid = crypto.randomUUID().toUpperCase()
+    return crypto.randomUUID().toUpperCase()
   } catch {
-    /* ignore */
+    return 'DEMO0000-0000-0000-0000-000000000000'
   }
+})()
+
+function fileId(org: Org): string {
+  // Шаблон имени файла обмена ФНС R_A_K_O_ГГГГММДД_N (приказ ММВ-7-6/362@):
+  // A=K — 4-значный код ИФНС-получателя; O для ИП — 12-значный ИНН (без КПП).
+  const ifns = org.taxOfficeCode || '0000'
   const inn = org.inn || '000000000000'
-  return `NO_USN_0000_0000_${inn}0000_${nowYmd()}_${guid}`
+  return `NO_USN_${ifns}_${ifns}_${inn}_${nowYmd()}_${SESSION_GUID}`
 }
 
 function splitFio(s: string): { fam: string; nam: string; otch: string } {
@@ -179,7 +187,8 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
   const xml = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<!-- ДЕМО-генерация формата ФНС. Перед сдачей сверить с XSD на format.nalog.ru. -->`,
-    `<Файл ИдФайл="${esc(fileId(org))}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.03">`,
+    // ВерсФорм 5.09 — приказ ФНС № ЕД-7-3/1017@ от 26.11.2025 (с отчётности за 2025).
+    `<Файл ИдФайл="${esc(fileId(org))}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.09">`,
     `  <Документ КНД="1152017" ДатаДок="${dateDoc}" Период="34" ОтчетГод="${org.year}" КодНО="${esc(org.taxOfficeCode || '0000')}" НомКорр="0" ПоМесту="120">`,
     `    <СвНП>`,
     `      <НПФЛ ИННФЛ="${esc(org.inn || '')}">`,
@@ -200,8 +209,7 @@ export function declarationUsnXml(org: Org, computed: Computed): string {
   return xml.join('\n')
 }
 
-/** Имя файла для скачивания. */
+/** Имя файла для скачивания — по шаблону файла обмена ФНС (как принимает ЛК/НП ЮЛ). */
 export function declarationFileName(org: Org): string {
-  const inn = org.inn || 'IP'
-  return `Деклараци_УСН_${inn}_${org.year}.xml`
+  return `${fileId(org)}.xml`
 }

@@ -53,17 +53,10 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
     ? '\n  <!-- Годовой режим: суммы авансов поквартально не разнесены. Годовой налог УСН подаётся декларацией, не уведомлением. -->'
     : ''
 
-  let guid = 'DEMO0000-0000-0000-0000-000000000000'
-  try {
-    guid = crypto.randomUUID().toUpperCase()
-  } catch {
-    /* ignore */
-  }
-
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<!-- ДЕМО-генерация формата ФНС. Перед отправкой сверить с XSD на format.nalog.ru. -->`,
-    `<Файл ИдФайл="UT_UVNALOG_0000_0000_${esc(org.inn || '000000000000')}_${guid}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
+    `<Файл ИдФайл="${esc(ensFileId(org))}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
     `  <Документ КНД="1110355" ДатаДок="${esc(dateDoc)}" КодНО="${esc(org.taxOfficeCode || '0000')}">${annualNote}`,
     `    <СвНП>`,
     `      <НПФЛ ИННФЛ="${esc(org.inn || '')}">`,
@@ -78,9 +71,26 @@ export function ensNotificationXml(org: Org, computed: Computed): string {
   ].join('\n')
 }
 
+// GUID фиксируется на загрузку страницы: имя файла и ИдФайл в XML должны совпадать.
+const SESSION_GUID: string = (() => {
+  try {
+    return crypto.randomUUID().toUpperCase()
+  } catch {
+    return 'DEMO0000-0000-0000-0000-000000000000'
+  }
+})()
+
+/** Идентификатор файла обмена — как у Эльбы/ФНС: UT_UVISCHSUMNAL_К_К_ИНН12_ГГГГММДД_GUID. */
+function ensFileId(org: Org): string {
+  const ifns = org.taxOfficeCode || '0000'
+  const inn = org.inn || '000000000000'
+  const d = new Date()
+  const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+  return `UT_UVISCHSUMNAL_${ifns}_${ifns}_${inn}_${ymd}_${SESSION_GUID}`
+}
+
 export function ensFileName(org: Org): string {
-  const inn = org.inn || 'IP'
-  return `Уведомление_ЕНС_${inn}_${org.year}.xml`
+  return `${ensFileId(org)}.xml`
 }
 
 /** Одна строка обязательства уведомления (КНД 1110355): любой налог/взнос, не только УСН. */
@@ -101,12 +111,6 @@ export interface EnsObligation {
 export function notificationXml(org: Org, rows: EnsObligation[]): string {
   const dateDoc = new Date().toLocaleDateString('ru-RU')
   const { fam, nam, otch } = splitFio(org.fio || org.name || '')
-  let guid = 'DEMO0000-0000-0000-0000-000000000000'
-  try {
-    guid = crypto.randomUUID().toUpperCase()
-  } catch {
-    /* ignore */
-  }
   const obXml = rows
     .map(
       (o) =>
@@ -116,7 +120,7 @@ export function notificationXml(org: Org, rows: EnsObligation[]): string {
   return [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<!-- ДЕМО-генерация формата ФНС. Перед отправкой сверить с XSD на format.nalog.ru. -->`,
-    `<Файл ИдФайл="UT_UVNALOG_0000_0000_${esc(org.inn || '000000000000')}_${guid}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
+    `<Файл ИдФайл="${esc(ensFileId(org))}" ВерсПрог="СвояКнига 1.0" ВерсФорм="5.01">`,
     `  <Документ КНД="1110355" ДатаДок="${esc(dateDoc)}" КодНО="${esc(org.taxOfficeCode || '0000')}">`,
     `    <СвНП>`,
     `      <НПФЛ ИННФЛ="${esc(org.inn || '')}">`,
